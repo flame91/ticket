@@ -1,0 +1,11 @@
+{
+  "name": "ticket-marketplace",
+  "owner": { "name": "flame91" },
+  "plugins": [
+    {
+      "name": "ticket",
+      "source": "./",
+      "description": "JIRA-driven solo-dev cycle: ticket → worktree → impl → tri-review → PR → merge → done"
+    }
+  ]
+}
