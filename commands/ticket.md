@@ -39,6 +39,16 @@
    - `To Do` / `In Progress` / `QA FAILED` → 구현 준비:
      1. 세션 타이틀에 `[{projectKey}-<n>]` 접두사 부여: `/rename` 슬래시 커맨드를 사용해 현재 세션 타이틀을 `[{projectKey}-<n>] <기존 타이틀 또는 티켓 summary 요약>` 형태로 변경. 이미 `[{projectKey}-<n>]` 접두사가 붙어 있으면 재설정하지 않음. (다른 `[{projectKey}-*]` 접두사가 있으면 새 티켓 번호로 교체.)
      2. 본문에 `## Done Criteria` / `## Out of Scope` / `## Verification` 섹션이 없으면 `editJiraIssue` 로 보강.
+     2.5. **핵심 설계 결정 사전 점검** (design-heavy 티켓 한정):
+        - 라벨에 `data-quality` / `data` / `data-pipeline` / `schema` / `api` / `backend` / `migration` / `llm` / `facet` 중 1개 이상 포함하면 design-heavy ticket 으로 분류.
+        - description 의 `## 핵심 설계 결정` 섹션 검사:
+          - **부재** → opus 가 description 분석해서 빠진 항목 (멀티값 컬럼 형식, breaking change 정책, 응답 직렬화, idempotency 등) 1~3개 추출 → `AskUserQuestion` 으로 사용자에게 결정 요청.
+          - **존재하지만 빈 항목 (`<TBD>` / `?` / 빈 줄)** 있으면 빈 항목만 추출해서 동일하게 사용자 확인.
+          - **모든 항목 채워짐** → 점검 통과, i-3 으로 진행.
+        - 사용자 답변 받은 후 `editJiraIssue` 로 description 갱신 (기존 섹션이 없으면 신설, 있으면 빈 항목 자리에 답변 삽입).
+        - **사용자가 "잘 모름 / impl-coder 자율" 선택**: description 에 그 명시 (`판단: impl-coder 자율, codex finding 발생 시 follow-up 분리`) — 이후 cycle 의 codex 라운드 sprawl 시 force-ack / follow-up 분리 정당화. 점검은 통과로 처리.
+        - **목적**: TM-231 사례 (codex 13라운드, 1h 27m, finding 50%+ 가 단일 설계 결정 누락에서 cascade) 같은 sprawl 차단. 사이클 시작 전 결정을 잠그는 게 핵심.
+        - **자동 흐름 (`/ticket:auto` / `/ticket:batch`) 에서 i-2.5**: AskUserQuestion 호출 시 자동 흐름이 잠시 멈춤 — 의도된 동작. 자동 흐름의 design-heavy 처리 변경은 별도 follow-up.
      3. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_worktree.md` "생성/재개" 참조.
      4. 티켓이 `To Do` 면 `getTransitionsForJiraIssue` → `Start work` → `transitionJiraIssue` 로 `In Progress`.
      5. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` 참조 (Phase 1 → Phase 2 순차 실행).
@@ -52,3 +62,4 @@
 - 상태 전환 실패(권한·transition 조건 미충족) 시 코멘트로 블로커를 기록하고 진행 중단.
 - transition id 는 프로젝트 설정 변경에 따라 바뀌므로 `getTransitionsForJiraIssue` 응답에서 이름으로 매칭.
 - PR 머지 자체를 완료로 취급하지 말 것. `Mark Done` 전환은 QA 통과 후에만.
+- design-heavy 티켓 (data/api/schema/migration/llm/facet 라벨) 은 step 6 i-2.5 의 사전 점검 통과 필수. 점검 우회는 사용자 명시 결정 시점에만 (예: "impl-coder 자율" 응답).

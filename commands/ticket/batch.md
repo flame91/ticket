@@ -175,3 +175,4 @@ Phase 2 순차: L개 머지, P개 실패
 - `/ticket:batch` 는 머지까지 자동 진행한다. 사용자 감독 없이 돌아가는 환경에서만 사용.
 - 수동 티켓 하나씩 확인·구현은 `/ticket <{projectKey}-n>`. JQL 자동 선정 루프는 `/ticket:auto`. 이 커맨드는 **명시 큐 전용**.
 - batch 진행 중 신규 티켓이 등장하면 `/ticket:batch:append <KEY>` 로 잔여 큐 끝에 append 가능 (순차 모드 또는 병렬 Phase 1 진행 중에 한함). 큐 중간 삽입·우선순위 변경은 지원하지 않으며 race 위험으로 명시적으로 거부.
+- 큰 키 리스트를 어떻게 분할(`--par` 묶음 / 순차 체인)할지 모르겠으면 `/ticket:batch:plan TM-a,TM-b,...` 를 먼저 호출해 권장안을 받아본다. plan 은 read-only 라 실행하지 않고 분할된 호출 명령만 출력한다.
