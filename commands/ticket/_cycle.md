@@ -134,7 +134,7 @@ PR 생성 직후, 머지 전에 **사용자가 읽을 수 있도록** 이번 사
 
 ```
 ── {projectKey}-<n> 검증 요약 ──
-/test:        PASS (86/86) | FAIL (2 실패, 재시도 후 PASS) | 스킵
+/test:        PASS (86/86) | FAIL (2 실패, 재시도 후 PASS) | N/A (변경이 회귀 매핑 무관 — 예 docs-only / .claude/ 전용) | ⚠ SKIP: <사유>
 /test chrome: PASS (home, detail) | FAIL → 수정 → PASS | N/A (변경 영역에 UI 매핑 0건) | ⚠ SKIP: dev 서버 미실행
 codex review: PASS (exit 0) | 반영 1회 (exit 1 → reflect) | PASS (chore allowlist auto) | N/A (codexReview.enabled=false)
 PR:           #<n> (<PR URL>)
@@ -142,7 +142,7 @@ PR:           #<n> (<PR URL>)
 ───────────────────────────────
 ```
 
-각 행은 실제 결과로 채운다. 상태 어휘: `PASS` (실행됨, 통과), `FAIL → 수정 → PASS` (재시도 후 통과), `N/A (사유)` (의도된 비대상 — 4b 자동 판정), `⚠ SKIP: <사유>` (환경 의존 미실행). N/A 와 SKIP 은 다르다 — N/A 는 잔여 리스크 아님, SKIP 은 잔여 리스크. 잔여 리스크가 있으면 마지막 행에 집약.
+각 행은 실제 결과로 채운다. 상태 어휘: `PASS` (실행됨, 통과), `FAIL → 수정 → PASS` (재시도 후 통과), `N/A (사유)` (의도된 비대상 — `/test chrome` 은 4b 자동 판정, `/test` 는 프로젝트 regression 스크립트가 auto 모드에서 변경 영역에 회귀 매핑 0건으로 판정한 경우 — 예 docs-only / `.claude/` 전용), `⚠ SKIP: <사유>` (환경 의존 미실행). N/A 와 SKIP 은 다르다 — N/A 는 잔여 리스크 아님, SKIP 은 잔여 리스크. 잔여 리스크가 있으면 마지막 행에 집약.
 
 ### 9. 머지
 
@@ -153,7 +153,7 @@ PR:           #<n> (<PR URL>)
 8a 검증 요약 기준 분기. 솔로 워크플로에서는 `/test` + `/test chrome` + Codex 교차리뷰가 모두 통과 (또는 비대상으로 N/A) 한 시점에 같은 코드를 같은 사람이 한 번 더 보는 READY FOR QA 게이트는 추가 효용이 거의 없으므로 우회한다. 단, 어느 한 단계라도 환경 의존으로 SKIP 되거나 잔여 리스크가 명시된 경우는 사용자 수동 QA 신호로 READY FOR QA 에 남긴다.
 
 - **모두 PASS / N/A + 잔여 리스크 없음** → `Mark Done` → `Done`.
-  - 판정 조건: `/test` PASS (재시도 후 PASS 포함), `/test chrome` **PASS 또는 N/A** (= 4b 자동 판정으로 변경 영역에 UI 매핑 0건), Codex review **exit 0 / chore allowlist auto-pass / `{codexReviewEnabled}=false` (= N/A by config)**, 8a 의 "잔여 리스크" 행이 "없음" 또는 비어 있음.
+  - 판정 조건: `/test` **PASS 또는 N/A** (재시도 후 PASS 포함, 또는 regression 스크립트가 auto 모드에서 변경 영역에 회귀 매핑 0건으로 판정 — 예 docs-only / `.claude/` 전용), `/test chrome` **PASS 또는 N/A** (= 4b 자동 판정으로 변경 영역에 UI 매핑 0건), Codex review **exit 0 / chore allowlist auto-pass / `{codexReviewEnabled}=false` (= N/A by config)**, 8a 의 "잔여 리스크" 행이 "없음" 또는 비어 있음.
 - **하나라도 SKIP / 잔여 리스크 명시** → `Submit for QA` → `READY FOR QA`.
   - 트리거 예: `/test chrome` SKIP (dev 서버 미기동 / WSL WebGL 미지원 등 — 환경 의존 미실행), Codex 자율 통과 finding 이 잔여 리스크로 명시된 경우, 사용자 향 변경에 a11y 미감사 등. **`{codexReviewEnabled}=false` 는 SKIP 이 아니라 N/A 로 취급** (의도된 비대상, 잔여 리스크 아님).
 - **N/A 와 SKIP 의 차이 (핵심)**: N/A 는 검증 대상이 변경 영역에 0건이거나 설정상 의도적으로 끈 상태 — 자동/설정 판정, PASS 와 동일하게 Mark Done 진로. SKIP 은 환경/도구 미가용으로 실행 못한 상태 — 운영자 수동 QA 요구 신호로 READY FOR QA 진로. 이 구분은 release 게이트의 신뢰성을 결정하므로 N/A 사유는 8a 요약과 step 11 코멘트 양쪽에 반드시 명시 (예: `codex review: N/A (codexReview.enabled=false)`).

@@ -13,7 +13,7 @@ Read `.claude/project.json` from the repo root. `jira.enabled` 가 `false` 이�
 | `{repoSlug}` | `project.repoSlug` | `$(basename "$(git rev-parse --show-toplevel)")` |
 | `{roleDocDir}` | `agents.roleDocDir` | `".claude/agents"` |
 | `{roleMapping}` | `agents.roleMapping` | `{}` |
-| `{regression}` | `scripts.regression` | `null` (테스트 프레임워크 자동 감지) |
+| `{regression}` | `scripts.regression` | `null` (테스트 프레임워크 자동 감지) — `scripts.regression` 권장 패턴 섹션 참조 |
 | `{codexReviewEnabled}` | `codexReview.enabled` | `false` |
 | `{choreAllowList}` | `codexReview.choreAllowList` | `["docs/", ".claude/", ".github/"]` |
 | `{maxConcurrent}` | `parallel.maxConcurrent` | `3` (최대 5) |
@@ -26,6 +26,15 @@ Read `.claude/project.json` from the repo root. `jira.enabled` 가 `false` 이�
 | `{jiraAttachmentEmail}` | `jira.attachmentApi.userEmail` | (필수 if enabled) |
 | `{jiraAttachmentTokenFile}` | `jira.attachmentApi.tokenFile` | (필수 if enabled) |
 | `{githubEvidenceEnabled}` | `github.evidenceComment.enabled` | `false` |
+
+## scripts.regression 권장 패턴
+
+`scripts.regression` 의 default 값은 **인자 없이 호출했을 때** 변경 영역을 자체적으로 감지하여 적절한 회귀만 돌리는 형태가 권장된다 (예: `bash scripts/regression.sh` 가 내부에서 `git diff` 기반으로 frontend / backend / compose 등 영향 영역을 골라 실행, backend 가 걸리면 pytest/ruff 자동 포함). § ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md step 3 은 `{regression}` 을 인자 없이 그대로 실행하므로:
+
+- 스크립트가 변경 영역에 회귀 매핑 0건이라고 판정 → exit 0 + 빈 결과. step 8a `/test` 행은 `N/A (사유)` 로 기록되며 step 10 분기에서 `Mark Done` 진로에 포함된다 (예: docs-only · `.claude/` 전용 변경).
+- 강제로 모든 회귀를 돌리고 싶을 때를 위해 스크립트는 별도 인자 (예: `all` / `full`) 를 받는 것이 좋지만, **`scripts.regression` default 값 자체에는 인자를 넣지 말 것** — 인자 없는 호출이 cycle 의 자동 판정 경로다.
+
+기존에 `bash scripts/regression.sh default` 등 명시 인자로 등록돼 있다면 인자를 제거하고 스크립트 측에서 인자 없는 호출을 auto 모드로 받도록 정리하는 것이 권장.
 
 ## skillIntegration 섹션
 

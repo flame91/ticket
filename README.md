@@ -20,6 +20,7 @@ Anthropic's Claude Code CLI.
 - `/ticket:auto` — auto-loop: pick → implement → review → merge → repeat
 - `/ticket:batch <KEY-a,KEY-b,...>` — explicit queue, sequential or `--par` parallel
 - `/ticket:batch:append <KEY>` — append to an in-flight batch queue
+- `/ticket:batch:plan <KEY-a,KEY-b,...>` — read-only split suggestion (parallel groups / sequential chains) before invoking `/ticket:batch`
 - `/ticket:audit` — find stale open tickets invalidated by later work + apply
 - `/work <slug>` — sibling worktree for non-ticket / chore work
 - `/push` (+ `/push chore`) — branch · commit · PR · merge · base sync · JIRA transition
