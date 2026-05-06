@@ -5,6 +5,12 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-05-06
+
+### Changed
+
+- `/ticket:list` JQL switched from `ORDER BY priority DESC, updated DESC` to `ORDER BY Rank ASC`. List now mirrors the JIRA backlog UI exactly — the rank field (maintained by `/ticket:rerank` or manual drag-drop) is the single source of truth for backlog order. Rationale: a "show the backlog" command should show the backlog's *current state*, not impose its own sort. The `/ticket:list` step-2 "1–3 things to do right now" pick (status-weight heuristic) is unchanged; with a fresh rerank, it naturally aligns with the rank-top-3.
+
 ## [0.2.1] - 2026-05-06
 
 ### Changed
@@ -84,6 +90,7 @@ The `v0.1.0` git tag was issued on 2026-05-06 for commit `a5ae50b`. That commit 
 - **Skills**: `diagnose`, `grill-with-docs`
 - **Scripts**: `session-state.sh`, `install-symlinks-home.sh`
 
+[0.2.2]: https://github.com/flame91/ticket/releases/tag/v0.2.2
 [0.2.1]: https://github.com/flame91/ticket/releases/tag/v0.2.1
 [0.2.0]: https://github.com/flame91/ticket/releases/tag/v0.2.0
 [0.1.3]: https://github.com/flame91/ticket/releases/tag/v0.1.3
