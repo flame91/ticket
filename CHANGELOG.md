@@ -5,6 +5,27 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-05-07
+
+### Fixed (BREAKING for `/ticket:rerank` apply path — config required)
+
+- `/ticket:rerank --apply` was silently no-op'ing since v0.1.3: the implementation wrote new Lexorank values via Rovo MCP `editJiraIssue`, but JIRA Cloud's platform edit endpoint **rejects Lexorank field updates** (a documented JIRA constraint). Confirmed against `flame91.atlassian.net` — no candidate had a suffixed rank value (`...:01`/`...:02`), and the backlog reverted to creation-order. The MCP `fetch` tool is ARI-only and cannot reach the Agile REST endpoint either, so MCP-only rerank is impossible on JIRA Cloud.
+- Reverted to the v0.1.2 architecture: `/ticket:rerank --apply` now calls `PUT /rest/agile/1.0/issue/rank` (the Agile REST API) via `curl`, per-pair with `rankAfterIssue`. The Lexorank string is never computed locally — the server allocates it.
+
+### Added
+
+- Restored `jira.restApi.{enabled, userEmail, tokenFile}` config block. Falls back to `jira.attachmentApi` if not set, so users who already configured the attachment token need no new setup.
+- Restored `jira.site` config field (host portion of the Atlassian Cloud URL, e.g. `flame91.atlassian.net`). Required by `/ticket:rerank --apply`.
+
+### Removed
+
+- `jira.rankFieldId` config field (introduced in v0.1.3, default `customfield_10019`). The relative-rank API does not need the field ID — ordering is expressed by `rankAfterIssue` only.
+- The anchor + 2-char base-36 suffix Lexorank strategy from v0.1.3 (no longer needed; the server allocates ranks).
+
+### Migration
+
+- `--dry-run` continues to work without any token. To use `--apply` again: set `jira.site` in `.claude/project.json`, and ensure either `jira.restApi` or `jira.attachmentApi` is enabled with a valid Atlassian Cloud API token at the configured `tokenFile` path. Most users who set up evidence attachments in v0.1.0+ already have the token — no new work needed.
+
 ## [0.2.2] - 2026-05-06
 
 ### Changed
@@ -90,6 +111,7 @@ The `v0.1.0` git tag was issued on 2026-05-06 for commit `a5ae50b`. That commit 
 - **Skills**: `diagnose`, `grill-with-docs`
 - **Scripts**: `session-state.sh`, `install-symlinks-home.sh`
 
+[0.2.3]: https://github.com/flame91/ticket/releases/tag/v0.2.3
 [0.2.2]: https://github.com/flame91/ticket/releases/tag/v0.2.2
 [0.2.1]: https://github.com/flame91/ticket/releases/tag/v0.2.1
 [0.2.0]: https://github.com/flame91/ticket/releases/tag/v0.2.0
