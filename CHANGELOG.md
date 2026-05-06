@@ -1,9 +1,29 @@
 # Changelog
 
-All notable changes to the ticket plugin will be documented in this file.
+All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.0] - 2026-05-06
+
+### Changed (BREAKING — plugin rename)
+
+- Plugin name: `ticket` → `flow`. Marketplace name: `ticket-marketplace` → `flow-marketplace`. Reason: plugin-mode invocation namespaces every command as `<plugin>:<path>`, so commands appeared as `/ticket:push`, `/ticket:ticket`, and `/ticket:ticket:list` — the doubled `ticket:` was avoidable noise. After the rename: `/flow:push`, `/flow:ticket`, `/flow:ticket:list`. The slash-command file structure (`commands/ticket.md`, `commands/ticket/list.md`, …) is unchanged; only the plugin namespace prefix moved.
+
+### Migration
+
+For plugin-install users:
+```
+/plugin uninstall ticket@ticket-marketplace
+/plugin marketplace remove ticket-marketplace
+/plugin marketplace add https://github.com/flame91/ticket
+/plugin install flow@flow-marketplace
+```
+
+For symlink-mode (Mode B) users: no action needed — `~/.claude/commands/ticket.md` (and friends) keep working as bare `/ticket`, `/push`, etc.
+
+The GitHub repository URL (`https://github.com/flame91/ticket`) is **unchanged** — only the plugin name inside the repo is.
 
 ## [0.1.3] - 2026-05-06
 
@@ -58,6 +78,7 @@ The `v0.1.0` git tag was issued on 2026-05-06 for commit `a5ae50b`. That commit 
 - **Skills**: `diagnose`, `grill-with-docs`
 - **Scripts**: `session-state.sh`, `install-symlinks-home.sh`
 
+[0.2.0]: https://github.com/flame91/ticket/releases/tag/v0.2.0
 [0.1.3]: https://github.com/flame91/ticket/releases/tag/v0.1.3
 [0.1.2]: https://github.com/flame91/ticket/releases/tag/v0.1.2
 [0.1.1]: https://github.com/flame91/ticket/releases/tag/v0.1.1

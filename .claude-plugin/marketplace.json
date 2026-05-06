@@ -1,9 +1,9 @@
 {
-  "name": "ticket-marketplace",
+  "name": "flow-marketplace",
   "owner": { "name": "flame91" },
   "plugins": [
     {
-      "name": "ticket",
+      "name": "flow",
       "source": "./",
       "description": "JIRA-driven solo-dev cycle: ticket → worktree → impl → tri-review → PR → merge → done"
     }

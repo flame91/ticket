@@ -1,6 +1,8 @@
-# ticket
+# flow
 
-> Current version: **v0.1.3** — see [CHANGELOG.md](CHANGELOG.md).
+> Current version: **v0.2.0** — see [CHANGELOG.md](CHANGELOG.md).
+>
+> Renamed from `ticket` in v0.2.0 to fix the `/ticket:ticket:*` namespace doubling. Slash commands now resolve as `/flow:ticket`, `/flow:push`, `/flow:ticket:list`, etc.
 
 JIRA-driven solo-dev cycle: **ticket → worktree → impl → tri-review → PR → merge → done**.
 
@@ -79,7 +81,7 @@ treat the missing component as N/A (no Mark Done blocker).
 
 ```
 /plugin marketplace add https://github.com/flame91/ticket
-/plugin install ticket@ticket-marketplace
+/plugin install flow@flow-marketplace
 ```
 
 That registers the marketplace in `~/.claude/settings.json` and pulls the plugin to

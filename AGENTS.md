@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Specialized workflows for the ticket plugin repository.
+Specialized workflows for the flow plugin repository (renamed from `ticket` in v0.2.0; GitHub repo URL is unchanged).
 
 ---
 
 ## release-check
 
-**Description:** Pre-release verification checklist for the ticket plugin.
+**Description:** Pre-release verification checklist for the flow plugin.
 
 **Steps:**
 

@@ -1,6 +1,6 @@
 {
-  "name": "ticket",
-  "version": "0.1.3",
+  "name": "flow",
+  "version": "0.2.0",
   "description": "JIRA-driven solo-dev cycle: ticket → worktree → impl → tri-review → PR → merge → done",
   "author": { "name": "flame91" }
 }
