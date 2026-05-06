@@ -18,6 +18,7 @@ Anthropic's Claude Code CLI.
 
 **Slash commands**
 
+- `/flow:setup` — bootstrap or edit `.claude/project.json` (interactive wizard: JIRA basics, repo basics, `skillIntegration` toggles)
 - `/ticket <KEY-n>` — single-ticket entry point (status-aware routing)
 - `/ticket:list` — JIRA backlog summary
 - `/ticket:create` — new ticket, optionally seeded from `pm-execution` skills
@@ -107,7 +108,7 @@ so editing either path edits the same file.
 
 ## Per-project setup — `.claude/project.json`
 
-Drop this in any project root that uses the workflow. Minimum:
+Run `/flow:setup` from the repo root for an interactive wizard (covers JIRA basics, repo basics, and the `skillIntegration` toggles; preserves out-of-scope keys on edit). Or drop the file in by hand — minimum:
 
 ```jsonc
 {

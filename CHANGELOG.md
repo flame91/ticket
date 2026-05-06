@@ -5,6 +5,12 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-05-07
+
+### Added
+
+- `/flow:setup` — interactive wizard for `.claude/project.json`. Auto-detects bootstrap vs edit mode, walks the user through JIRA basics (cloudId, projectKey, epicIssueType, site — autodetected via Rovo MCP), repo basics (`git.baseBranch`, `project.repoSlug`), and the five `skillIntegration.*` toggles (with companion-plugin presence detection driving recommendations). Writes via jq deep merge so out-of-scope keys (`jira.attachmentApi`, `jira.restApi`, `github.evidenceComment`, `codexReview`, `parallel`, `agents`, `scripts.regression`) are preserved verbatim. Idempotent. Edit mode keeps a `.bak.<epoch>` snapshot for rollback.
+
 ## [0.2.3] - 2026-05-07
 
 ### Fixed (BREAKING for `/ticket:rerank` apply path — config required)
