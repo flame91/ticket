@@ -25,7 +25,10 @@ Read `.claude/project.json` from the repo root. If `jira.enabled` is `false` or 
 | `{jiraAttachmentEnabled}` | `jira.attachmentApi.enabled` | `false` |
 | `{jiraAttachmentEmail}` | `jira.attachmentApi.userEmail` | (required if enabled) |
 | `{jiraAttachmentTokenFile}` | `jira.attachmentApi.tokenFile` | (required if enabled) |
-| `{rankFieldId}` | `jira.rankFieldId` | `"customfield_10019"` |
+| `{jiraSite}` | `jira.site` | (required for `/ticket:rerank --apply`; e.g. `flame91.atlassian.net`) |
+| `{jiraRestApiEnabled}` | `jira.restApi.enabled` ∥ `jira.attachmentApi.enabled` | `false` |
+| `{jiraRestApiEmail}` | `jira.restApi.userEmail` ∥ `jira.attachmentApi.userEmail` | (required if enabled) |
+| `{jiraRestApiTokenFile}` | `jira.restApi.tokenFile` ∥ `jira.attachmentApi.tokenFile` | (required if enabled) |
 | `{githubEvidenceEnabled}` | `github.evidenceComment.enabled` | `false` |
 
 ## scripts.regression recommended pattern
@@ -49,17 +52,38 @@ The `skillIntegration` object in `.claude/project.json` opt-ins auxiliary skills
 | `grillWithDocsBeforeOrchestrator` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_orchestrator.md` step 1 (classification) | Call `/grill-with-docs` only when `invoking_command == "/ticket"` (manual entry); use the result as supplementary context for `reason`. Ignored under `/ticket:auto` · `/ticket:batch`. |
 | `releaseNotesOnUserFacing` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 11 (post-merge JIRA comment) | If the ticket labels include `user-facing` or `release-impacting`, attach a one-paragraph output from `pm-execution:release-notes` to the comment. |
 
-## jira.rankFieldId
+## jira.restApi section
 
-Used by `/ticket:rerank`. The custom-field ID of JIRA's Lexorank "Rank" field. On standard JIRA Software (company-managed) projects this is `customfield_10019` — the default. Override only if your instance reports a different field ID.
+General-purpose JIRA REST API credentials, used by `/ticket:rerank --apply` (Agile rank endpoint at `/rest/agile/1.0/issue/rank`) and any future curl-based JIRA write. The Atlassian Rovo MCP does not expose all JIRA endpoints — the JIRA Software Agile API (rank), in particular, is unreachable through `editJiraIssue` (the platform edit endpoint silently rejects Lexorank field updates) and through `fetch` (ARI-only). For these we call the REST API directly via curl.
 
-To discover yours: run `mcp__claude_ai_Atlassian_Rovo__getJiraIssue` on any ticket with `fields=["*all"]` and look for the field whose value matches the Lexorank format (`<bucket>|<base36>:<optional>`, e.g. `0|hzzzzz:`).
+Requires the same one-time API-token setup as `jira.attachmentApi` — and **if you already have `jira.attachmentApi` configured, `/ticket:rerank` automatically falls back to those credentials**, so most users do not need to add anything new here.
 
-`/ticket:rerank` writes new rank values via `editJiraIssue` (no curl, no extra credentials — uses the same MCP auth as every other ticket command). The Lexorank string for each non-anchor ticket is computed by appending a 2-character base-36 suffix to the proposed-position-0 ticket's current rank.
+| Key | Meaning |
+|---|---|
+| `enabled` | true/false. Defaults to the value of `jira.attachmentApi.enabled` if absent. false blocks `/ticket:rerank --apply` (dry-run still works). |
+| `userEmail` | Atlassian account email. Defaults to `jira.attachmentApi.userEmail`. |
+| `tokenFile` | Path to a file containing the API token. Defaults to `jira.attachmentApi.tokenFile`. |
+
+Also requires top-level `jira.site` — the host portion of the Atlassian Cloud URL (e.g. `flame91.atlassian.net`). Used as the curl base URL.
+
+**Migration tip:** if `jira.attachmentApi` is already set up, you can leave it alone — `/ticket:rerank` will reuse those values. Add an explicit `jira.restApi` block only if you want different credentials for the rank API (rare).
+
+```jsonc
+{ "jira": {
+    ...
+    "site": "flame91.atlassian.net",
+    "restApi": {
+      "enabled": true,
+      "userEmail": "you@example.com",
+      "tokenFile": "~/.config/jira/api-token"
+    }
+  }
+}
+```
 
 ## jira.attachmentApi section
 
-Required for the evidence-screenshot attachment in `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 11b. The Atlassian Rovo MCP does not expose an attachment tool, so we call the REST API directly (`curl`). Requires a separate token setup.
+Required for the evidence-screenshot attachment in `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 11b. The Atlassian Rovo MCP does not expose an attachment tool, so we call the REST API directly (`curl`). Requires a separate token setup. *(Also acts as a fallback source for `jira.restApi` — `/ticket:rerank` reads these as a default when no explicit `jira.restApi` block is set.)*
 
 | Key | Meaning |
 |---|---|

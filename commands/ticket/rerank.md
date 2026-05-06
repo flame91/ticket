@@ -2,16 +2,18 @@
 
 > If `jira.enabled` is `false`, print "JIRA not configured. Add a `jira` section to `.claude/project.json`" and exit.
 
-Read-only proposal of a new ordering for the working backlog (status group + priority + age), then on user approval, write ranks back to JIRA via `editJiraIssue` on the rank custom field. Sibling to `/ticket:audit` — same propose → approve → apply shape.
+Read-only proposal of a new ordering for the working backlog (status group + priority + age), then on user approval, write ranks back to JIRA via `curl PUT /rest/agile/1.0/issue/rank` (the Agile REST API). Sibling to `/ticket:audit` — same propose → approve → apply shape.
 
-The Atlassian Rovo MCP `editJiraIssue` accepts arbitrary `fields`, including the rank custom field (`customfield_10019` on standard JIRA Software projects, overridable via `jira.rankFieldId`). New rank values are computed by appending a unique base-36 suffix to the anchor ticket's current Lexorank — no curl, no separate REST credentials, no Lexorank arithmetic library needed.
+**Why curl, not the MCP.** The Atlassian Rovo MCP cannot set rank: `editJiraIssue` wraps JIRA's platform edit endpoint, which **silently rejects Lexorank field updates** (a documented JIRA Cloud constraint), and `fetch` is ARI-only so it cannot reach the Agile REST endpoint. The only working path is `PUT /rest/agile/1.0/issue/rank` with `rankBeforeIssue` / `rankAfterIssue` (relative — never compute Lexorank strings yourself), max 50 issues per call, scope `write:issue:jira-software`. Auth uses the same Cloud API token pattern as `jira.attachmentApi`.
 
 ## Step 0: Load project config
 
 § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_config.md`. Bindings used here:
 
 - `{cloudId}`, `{projectKey}`, `{epicIssueType}` (existing).
-- `{rankFieldId}` — `jira.rankFieldId` if set, default `"customfield_10019"`. The custom-field ID of the Lexorank "Rank" field on the user's JIRA instance.
+- `{jiraSite}` — `jira.site`, e.g. `flame91.atlassian.net`. Required for `--apply`. If absent, **hard stop** with a setup pointer.
+- `{jiraRestApiEnabled}` — `jira.restApi.enabled` (falls back to `jira.attachmentApi.enabled`). False blocks `--apply` (dry-run still works).
+- `{jiraRestApiEmail}`, `{jiraRestApiTokenFile}` — same fallback chain. Used as `curl -u "${email}:${token}"`.
 
 ## Arguments
 
@@ -35,10 +37,10 @@ Combinable (`--parent {projectKey}-150 --top 10`, `--explicit KEY1,KEY2 --dry-ru
 - jql: `project = {projectKey} AND status IN ("To Do", "In Progress", "QA FAILED", "READY FOR QA") AND issuetype != "{epicIssueType}" ORDER BY Rank ASC`
   - Override the status list via `--status "..."`.
   - Append `AND parent = "<{projectKey}-epic>"` for `--parent`.
-- fields: `["summary", "status", "issuetype", "priority", "labels", "created", "parent", "{rankFieldId}"]`
+- fields: `["summary", "status", "issuetype", "priority", "labels", "created", "parent"]`
 - maxResults: `50`
 
-The current Lexorank string for each ticket is read from the `{rankFieldId}` field (e.g. `0|hzzzzz:`, `0|i0000v:`). It will be used as the anchor for new rank computation in step 5.
+The relative-rank API (step 5) does not need to know the existing Lexorank strings — it expresses ordering as `rankBeforeIssue` / `rankAfterIssue` (key-relative). We only use the JQL result to capture the **current order** (for the proposal table's "Old #" column) and the candidate set.
 
 If the JQL returns more than 50 entries, **warn** that only the first 50 (by current rank) will be considered this run, and the user can re-invoke after applying to operate on the next page.
 
@@ -94,55 +96,39 @@ Apply this rerank?
 
 Wait for the user's response. On any unrecognized input or empty answer, **default to cancel** and exit.
 
-### 5. Compute new Lexorank values + apply via editJiraIssue
+### 5. Apply via Agile REST `PUT /rest/agile/1.0/issue/rank`
 
-**Anchor strategy.** The first ticket in the proposed order (`seq[0]`) keeps its existing rank — call that string `R_anchor`. Every other ticket in the proposed order gets a new rank value formed by appending a 2-character base-36 suffix to `R_anchor`:
+**Per-pair iteration, never batched.** For each pair `(prev, curr)` in the approved sequence (starting from index 1, where `prev = seq[i-1]` and `curr = seq[i]`), issue one PUT call with `rankAfterIssue = prev.key` and `issues = [curr.key]`:
 
-```
-seq[0].new_rank = R_anchor                         (no write needed)
-seq[i].new_rank = R_anchor + base36_2char(i)       for i = 1..N-1
-```
-
-Where `base36_2char(i)` is the 2-character left-zero-padded base-36 encoding of `i`:
-
-| i | suffix | i | suffix | i | suffix |
-|---|---|---|---|---|---|
-| 1 | `01` | 10 | `0a` | 36 | `10` |
-| 2 | `02` | 35 | `0z` | 49 | `1d` |
-| … | … | … | … | … | … |
-
-This is enough for any rerank up to 49 entries (and the JQL maxResults cap is 50 anyway).
-
-**Why this works.** Lexorank strings are compared lexicographically. `R_anchor < R_anchor + "01" < R_anchor + "02" < ... < R_anchor + "0z" < R_anchor + "10" < ...` always holds, and these new strings are all strictly less than the next existing rank above `R_anchor` in the project (they share `R_anchor` as a prefix, but are longer — and any existing rank with a larger prefix character at the same position will sort higher).
-
-**Writes.** For each `(ticket, new_rank)` pair where `ticket.current_rank != new_rank` (i.e. not a no-op), call:
-
-```
-mcp__claude_ai_Atlassian_Rovo__editJiraIssue(
-  cloudId={cloudId},
-  issueIdOrKey=ticket.key,
-  fields={ "{rankFieldId}": new_rank }
-)
+```bash
+TOKEN=$(cat "${jiraRestApiTokenFile/#~/$HOME}")
+curl -sS -u "${jiraRestApiEmail}:${TOKEN}" \
+  -X PUT "https://{jiraSite}/rest/agile/1.0/issue/rank" \
+  -H 'Content-Type: application/json' \
+  -d "{\"issues\": [\"${curr.key}\"], \"rankAfterIssue\": \"${prev.key}\"}" \
+  -w '%{http_code}\n' -o /tmp/rerank-resp-$$.json
 ```
 
-Issue these calls sequentially (no parallel writes — keeps order of operations clean and avoids transient ordering races during the apply). Track each call's outcome (success / error) for the result table.
+**Why per-pair, not a single batched call.** The Agile API's batch mode (multiple `issues` with one `rankAfterIssue`) places **all** listed issues immediately after the same anchor — fine for "move N tickets to one spot" but **wrong** for enforcing a total order over N tickets. Per-pair iteration is the correct primitive for "make seq[i] come right after seq[i-1] for every i".
 
-**Retry.** Retry once on transient errors (network blip, 5xx). On 4xx (e.g. field rejected, permission denied), abort the rest of the apply and report the partial result.
+**No-op detection.** Skip the curl call when the proposed pair already matches the current order (`prev` was already immediately before `curr` in the JQL `ORDER BY Rank ASC` result). Track these as "no-op" in the result table.
+
+**Retry.** Retry once on transient errors (network blip, HTTP 5xx). On HTTP 4xx (401/403 stale token, 400 invalid issue key, etc.), abort the rest of the apply and report the partial result. Sequential issue order is critical — a parallel apply would race on rank assignment.
 
 ### 6. Print apply-result table
 
 ```
 ## /ticket:rerank apply result
 
-| # | Key             | New rank suffix | Result   |
-|---|---|---|---|
-| 1 | {projectKey}-42 | (anchor)        | no-op    |
-| 2 | {projectKey}-15 | 01              | OK       |
-| 3 | {projectKey}-99 | 02              | OK       |
-| 4 | {projectKey}-7  | 03              | FAIL: <reason> |
-| …                                                  |
+| # | Issue            | rankAfterIssue   | HTTP | Result |
+|---|---|---|---|---|
+| 1 | {projectKey}-15  | {projectKey}-42  | 204  | OK     |
+| 2 | {projectKey}-99  | {projectKey}-15  | —    | no-op (already in order) |
+| 3 | {projectKey}-7   | {projectKey}-99  | 204  | OK     |
+| 4 | {projectKey}-3   | {projectKey}-7   | 401  | FAIL: token rejected |
+| …                                                                |
 
-Applied: K of N. Failed: F. Anchor (no write): {projectKey}-42 → R_anchor unchanged.
+Applied: K of N. Failed: F. No-ops: M.
 ```
 
 On any 4xx mid-batch: stop, print the partial result, and warn the user that the JIRA backlog is now in an intermediate state — some new ranks applied, some old ranks remain. Suggest re-running `/ticket:rerank` to converge.
@@ -152,20 +138,24 @@ On any 4xx mid-batch: stop, print the partial result, and warn the user that the
 | Trigger | Action |
 |---|---|
 | `jira.enabled = false` | Standard "JIRA not configured" notice, exit 0 |
-| `{rankFieldId}` value missing on any candidate (rank column comes back null) | Hard stop with: "Rank field `{rankFieldId}` returned no value for `<key>`. Override `jira.rankFieldId` in `.claude/project.json` if your instance uses a different field ID, then re-run." |
+| `--apply` requested but `{jiraRestApiEnabled}` is false (and `attachmentApi.enabled` is also false / unset) | Hard stop with: "Set up `jira.restApi` per `_config.md` to apply ranks. Use `--dry-run` to preview only." |
+| `{jiraSite}` unset and `--apply` requested | Hard stop with: "Set `jira.site` (e.g. `flame91.atlassian.net`) in `.claude/project.json`, then re-run." |
+| Token file unreadable | Hard stop pointing at the `_config.md` `jira.restApi` setup steps |
 | MCP 401/403 on the JQL fetch | Re-check via `mcp__claude_ai_Atlassian_Rovo__getAccessibleAtlassianResources`; abort if still failing |
-| MCP write returns 4xx (field rejected) | Abort the rest of the apply; partial result table; suggest re-run |
-| Total candidates > 50 | Warn and operate on the first 50 only |
+| Curl HTTP 401/403 | Token likely stale; print "regenerate at https://id.atlassian.com/manage-profile/security/api-tokens" and abort the apply |
+| Curl HTTP 4xx (other) | Abort the rest of the apply; partial result table; suggest re-run |
+| Total candidates > 50 | Warn and operate on the first 50 only (per-call API cap) |
 | `--explicit` keys mismatch the candidate set | Abort, list mismatches |
 
 ## Notes
 
 - **Read-only by default through step 3.** No JIRA writes before user approval.
-- **MCP-only writes.** Uses `editJiraIssue` exclusively — no curl, no separate API token, no `jira.restApi` config. Reuses the same MCP auth context already established for every other ticket-plugin command.
-- **Anchor + suffix Lexorank.** No external Lexorank library. The first ticket in the proposed order keeps its current rank as anchor; subsequent tickets get ranks formed by suffix-appending. This works for ≤49 entries (the JQL cap is 50).
+- **Curl + Agile REST.** Uses `PUT /rest/agile/1.0/issue/rank` (relative `rankAfterIssue`). The MCP path is unavailable: `editJiraIssue` silently rejects Lexorank field updates, and `fetch` is ARI-only (no arbitrary REST). Token reuses `jira.restApi` (with `jira.attachmentApi` fallback) — typically nothing new to set up if attachments are already configured.
+- **Lexorank strings are never computed locally.** All ordering is expressed via `rankAfterIssue` (relative). The Agile API allocates new Lexoranks on the server side.
+- **Per-pair, never batched.** N-1 sequential PUT calls for N tickets. Batched mode (multiple issues sharing one anchor) would only place all of them after the same anchor — wrong for total-order enforcement.
 - **Sibling to `/ticket:audit`.** Same propose → approve → apply shape.
 - **Does not consult or mutate `/ticket:auto` selection logic.** `/ticket:auto` uses its own status-and-label heuristic and does not read JIRA Rank.
-- **Out of scope this version**: cross-project rerank, more than 50 in one invocation, recurring auto-rerank, reranking inside the Done pile, cleanup of accumulated suffixes (each rerank stacks one more suffix layer onto the anchor; after many reruns Lexorank rebalancing may be triggered server-side, which is fine).
+- **Out of scope this version**: cross-project rerank, more than 50 in one invocation, recurring auto-rerank, reranking inside the Done pile.
 
 ## Related commands
 

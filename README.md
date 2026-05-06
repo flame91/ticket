@@ -1,6 +1,6 @@
 # flow
 
-> Current version: **v0.2.2** — see [CHANGELOG.md](CHANGELOG.md).
+> Current version: **v0.2.3** — see [CHANGELOG.md](CHANGELOG.md).
 >
 > Renamed from `ticket` in v0.2.0 to fix the `/ticket:ticket:*` namespace doubling. Slash commands now resolve as `/flow:ticket`, `/flow:push`, `/flow:ticket:list`, etc.
 
@@ -26,7 +26,7 @@ Anthropic's Claude Code CLI.
 - `/ticket:batch:append <KEY>` — append to an in-flight batch queue
 - `/ticket:batch:plan <KEY-a,KEY-b,...>` — read-only split suggestion (parallel groups / sequential chains) before invoking `/ticket:batch`
 - `/ticket:audit` — find stale open tickets invalidated by later work + apply
-- `/ticket:rerank` — propose + (on approval) apply a backlog rerank by status / priority / age (writes via Rovo MCP `editJiraIssue`, no curl)
+- `/ticket:rerank` — propose + (on approval) apply a backlog rerank by status / priority / age (writes via Agile REST `PUT /rest/agile/1.0/issue/rank`; needs a one-time `jira.restApi` token, falls back to `jira.attachmentApi`)
 - `/ticket:release` — pre-release verification checklist for the plugin itself (read-only)
 - `/work <slug>` — sibling worktree for non-ticket / chore work
 - `/push` (+ `/push chore`) — branch · commit · PR · merge · base sync · JIRA transition
