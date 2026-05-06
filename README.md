@@ -1,6 +1,6 @@
 # flow
 
-> Current version: **v0.2.0** — see [CHANGELOG.md](CHANGELOG.md).
+> Current version: **v0.2.1** — see [CHANGELOG.md](CHANGELOG.md).
 >
 > Renamed from `ticket` in v0.2.0 to fix the `/ticket:ticket:*` namespace doubling. Slash commands now resolve as `/flow:ticket`, `/flow:push`, `/flow:ticket:list`, etc.
 
