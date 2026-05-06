@@ -28,7 +28,7 @@ Parse the argument. If absent, auto-detect impacted pages from `git diff --name-
 
 **diff → page mapping:**
 
-- `components/home/` or `app/[locale]/page.tsx` → home
+- `home/*` under `components/`, or `app/[locale]/page.tsx` → home
 - `components/map/` or `app/[locale]/nearby/` → nearby
 - `components/facility/` or `app/[locale]/bookmarks/` → bookmarks
 - `app/[locale]/[prefecture]/[id]/` → detail
