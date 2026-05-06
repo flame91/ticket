@@ -33,5 +33,5 @@ reason: <one short paragraph grounded in repo state>
 
 - Do not edit files. Write/Edit/MultiEdit are not available to this subagent by design.
 - Do not make implementation decisions — pick the owner that owns the blocking decision, not every touched layer.
-- Epic issues (matching `jira.epicIssueType` from project config, e.g. "에픽") are excluded from auto selection; treat as `blocked-by-current-work` if selected by mistake.
+- Epic issues (matching `jira.epicIssueType` from project config, e.g. "Epic") are excluded from auto selection; treat as `blocked-by-current-work` if selected by mistake.
 - If scope is too broad, route to `release-manager` instead of guessing an implementation slice.
