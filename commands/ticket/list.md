@@ -13,7 +13,8 @@ Read `.claude/project.json` from the repo root. If `jira.enabled` is `false` or 
 
 1. Call `mcp__claude_ai_Atlassian_Rovo__searchJiraIssuesUsingJql`:
    - cloudId: `{cloudId}`
-   - jql: `project = {projectKey} AND statusCategory != Done ORDER BY priority DESC, updated DESC`
+   - jql: `project = {projectKey} AND statusCategory != Done ORDER BY Rank ASC`
+   - The order mirrors the JIRA backlog UI exactly. `/ticket:list` shows the **current state** of the backlog — it does not re-sort. Whoever set the rank (a manual drag in JIRA, or `/ticket:rerank`) owns the ordering.
    - fields: `["summary","status","issuetype","priority","labels","assignee","parent"]`
    - maxResults: 30
 2. Analyze results and summarize three things:
