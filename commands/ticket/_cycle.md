@@ -72,7 +72,13 @@ Only tickets with Phase 1 `"ready"` enter. Even in parallel mode, this section r
 > Run only when the caller is `/ticket*`. If the user invoked `/test chrome` directly, this substep does not exist (chrome.md's hard-stop rule applies).
 
 1. **Chrome DevTools MCP check** — call `mcp__chrome-devtools__list_pages`. On failure → skip all of 4a (reason: "Chrome DevTools MCP not connected").
-2. **Existing server check** — `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ja`. 200 → `_cycle_dev_pid = null` (externally started), **proceed to 4b.**
+2. **Existing server check** —
+   a. `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ja` → if not 200, fall through to step 3.
+   b. If 200, capture the LISTEN PID with `lsof -ti -sTCP:LISTEN -iTCP:3000` (single PID expected).
+   c. Resolve the PID's working directory with `lsof -p <pid> -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'` (macOS/Linux compatible). Compare against `{worktree.cwd}/frontend` after symlink resolution (`realpath` both sides).
+   d. **cwd matches** → external server is serving this worktree, set `_cycle_dev_pid = null` (externally started), **proceed to 4b**.
+   e. **cwd does not match** → record `_cycle_external_dev_replaced = "<other-cwd>"`, emit a one-line user-facing log (`replacing external dev server (PID <pid>, serving <other-cwd>) with worktree-local server`), then `kill <pid>` and poll `lsof -ti :3000` every 1s up to 5s for the port to free; on success fall through to step 5 (cycle starts its own server) — track its PID in `_cycle_dev_pid` as usual so step 12 still kills it on exit. On step 12 cleanup, append a one-line user notice (`killed external dev server (was serving <other-cwd>); restart with \`cd frontend && npm run dev\` if needed`) only when `_cycle_external_dev_replaced` is set.
+   f. **cwd resolution fails** (permission denied, lsof unavailable, Windows host) → conservative reuse: set `_cycle_dev_pid = null`, log `external dev server cwd unverified — reusing without confirmation` to the Phase 2 outstanding-risk row, **proceed to 4b**.
 3. **Port conflict check** — `lsof -ti :3000`. If a PID exists → skip 4a (reason: "port 3000 occupied (PID N) — no 200 response. Manual check required").
 4. **Dependency check** — `[ -x "{worktree.cwd}/frontend/node_modules/.bin/next" ]`. If missing, `( cd "{worktree.cwd}/frontend" && npm ci )`. On failure → skip 4a (reason: "npm ci failed").
 5. **Start** — `cd "{worktree.cwd}/frontend" && NEXT_PUBLIC_API_URL=/api NEXT_PUBLIC_BACKEND_URL=http://localhost:8000 API_INTERNAL_URL=http://localhost:8000 npm run dev &`. Record the PID in `_cycle_dev_pid`.
@@ -248,7 +254,7 @@ If `{githubEvidenceEnabled}` is false, the directory is empty, or the gh CLI is 
 
 ### 12. Worktree cleanup
 
-**Dev server cleanup (first):** if `_cycle_dev_pid` is non-null and the process is alive, run `kill $_cycle_dev_pid; wait $_cycle_dev_pid 2>/dev/null`. Always perform on both normal and hard-stop paths.
+**Dev server cleanup (first):** if `_cycle_dev_pid` is non-null and the process is alive, run `kill $_cycle_dev_pid; wait $_cycle_dev_pid 2>/dev/null`. Always perform on both normal and hard-stop paths. If `_cycle_external_dev_replaced` was set in 4a-2-e, additionally emit one user-facing line: `killed external dev server (was serving <_cycle_external_dev_replaced>); restart with` `cd frontend && npm run dev` `if needed`. Skip this notice when the flag is unset (the common case).
 
 **Evidence directory cleanup:** if `_cycle_evidence_dir` is non-null, after step 11 finishes (both normal and hard-stop) run `rm -rf "$_cycle_evidence_dir"`. If any uploads failed, report the path to the user in one line right before cleanup so they have a chance to recover manually.
 
