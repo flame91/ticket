@@ -1,6 +1,6 @@
 # ticket
 
-> Current version: **v0.1.0** — see [CHANGELOG.md](CHANGELOG.md).
+> Current version: **v0.1.1** — see [CHANGELOG.md](CHANGELOG.md).
 
 JIRA-driven solo-dev cycle: **ticket → worktree → impl → tri-review → PR → merge → done**.
 
