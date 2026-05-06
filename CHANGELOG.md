@@ -5,6 +5,14 @@ All notable changes to the ticket plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-05-06
+
+### Added
+
+- `/ticket:rerank` — propose backlog rerank (status group + priority + age) and apply via the JIRA Agile REST API on approval. Read-only by default; `--dry-run`, `--top N`, `--parent`, `--status`, and `--explicit` modes supported. Sibling to `/ticket:audit`.
+- `jira.restApi.{enabled, userEmail, tokenFile}` config block — generalizes the existing `jira.attachmentApi` for any curl-based JIRA write. `jira.attachmentApi` continues to work as a legacy alias (existing setups need no changes).
+- `jira.site` config field (host portion of the Atlassian Cloud URL, e.g. `flame91.atlassian.net`) — required by `/ticket:rerank --apply`.
+
 ## [0.1.1] - 2026-05-06
 
 ### Added
@@ -31,5 +39,6 @@ The `v0.1.0` git tag was issued on 2026-05-06 for commit `a5ae50b`. That commit 
 - **Skills**: `diagnose`, `grill-with-docs`
 - **Scripts**: `session-state.sh`, `install-symlinks-home.sh`
 
+[0.1.2]: https://github.com/flame91/ticket/releases/tag/v0.1.2
 [0.1.1]: https://github.com/flame91/ticket/releases/tag/v0.1.1
 [0.1.0]: https://github.com/flame91/ticket/releases/tag/v0.1.0
