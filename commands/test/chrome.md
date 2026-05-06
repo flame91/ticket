@@ -1,136 +1,147 @@
-# /test chrome — Chrome DevTools MCP 브라우저 검증
+# /test chrome — Chrome DevTools MCP browser verification
 
 $ARGUMENTS
 
-Chrome DevTools MCP 도구로 프론트엔드 앱의 레이아웃, 접근성, 네트워크 요청, 콘솔 에러를 검증한다. `docs/0406_REGRESSION_CHECKLIST.md` 수동 체크리스트의 자동화 보완 레이어.
+Use the Chrome DevTools MCP tools to verify a frontend app's layout, accessibility, network requests, and console errors. This is the automation layer that complements the manual checklist in `docs/0406_REGRESSION_CHECKLIST.md`.
 
-> **Tip:** 코드 레벨 회귀 테스트는 `/test` 를 사용. `/test chrome` 은 브라우저에서 실제 렌더링된 결과를 검증하는 용도.
+> **Tip:** For code-level regression tests, use `/test`. `/test chrome` is for verifying what is actually rendered in the browser.
 
-## 범위 결정
+## Scope selection
 
-인자를 해석한다. 없으면 `git diff --name-only` 기반으로 영향받는 페이지를 자동 판정.
+Parse the argument. If absent, auto-detect impacted pages from `git diff --name-only`.
 
-| 인자 | 대상 |
+| Argument | Target |
 |------|------|
-| (없음) | diff 기반 자동 판정 |
-| `home` | `/[locale]/` |
-| `nearby` | `/[locale]/nearby` |
-| `bookmarks` | `/[locale]/bookmarks` |
-| `prefecture` | `/[locale]/[prefecture]/` |
-| `detail` | `/[locale]/[prefecture]/[id]` |
-| `search` | `/[locale]/search` |
-| `mobile` | 전 페이지, 모바일 뷰포트 |
-| `a11y` | 전 페이지, Lighthouse 접근성 감사 |
-| `full` | 전 페이지, 데스크톱+모바일, ja/en/ko, 접근성 |
+| (none) | auto-detect from diff (verifies both PC and SP) |
+| `home` | `/[locale]/` (PC + SP) |
+| `nearby` | `/[locale]/nearby` (PC + SP) |
+| `bookmarks` | `/[locale]/bookmarks` (PC + SP) |
+| `prefecture` | `/[locale]/[prefecture]/` (PC + SP) |
+| `detail` | `/[locale]/[prefecture]/[id]` (PC + SP) |
+| `search` | `/[locale]/search` (PC + SP) |
+| `pc-only` | all pages, desktop viewport only (debug / quick check) |
+| `sp-only` | all pages, mobile viewport only (debug / quick check) |
+| `a11y` | all pages, Lighthouse accessibility audit |
+| `full` | all pages, PC+SP, ja/en/ko, accessibility |
 
-**diff → 페이지 매핑:**
+**Default policy: always verify both PC (desktop) and SP (mobile) viewports.** Skip one side only when `pc-only` / `sp-only` is explicit.
 
-- `components/home/` 또는 `app/[locale]/page.tsx` → home
-- `components/map/` 또는 `app/[locale]/nearby/` → nearby
-- `components/facility/` 또는 `app/[locale]/bookmarks/` → bookmarks
+**diff → page mapping:**
+
+- `components/home/` or `app/[locale]/page.tsx` → home
+- `components/map/` or `app/[locale]/nearby/` → nearby
+- `components/facility/` or `app/[locale]/bookmarks/` → bookmarks
 - `app/[locale]/[prefecture]/[id]/` → detail
 - `app/[locale]/[prefecture]/page.tsx` → prefecture
 - `app/[locale]/search/` → search
 - `components/layout/`, `lib/api.ts`, `globals.css` → full
-- `messages/` → 변경된 locale 로 전 페이지
+- `messages/` → all pages, restricted to the changed locale
 
-## Step 0 — 사전 조건 확인
+## Step 0 — Prerequisites
 
-1. **dev 서버**: `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ja` 실행. 200 이 아니면 **하드 스탑** — "dev 서버가 실행 중이지 않습니다. `cd frontend && npm run dev` 또는 `docker compose up -d` 로 먼저 시작하세요." 안내 후 중단.
-2. **브라우저 연결**: `mcp__chrome-devtools__list_pages` 호출. 실패하면 **하드 스탑** — "Chrome DevTools MCP 에 연결할 수 없습니다. Chrome 이 `--remote-debugging-port` 로 실행 중인지 확인하세요." 안내 후 중단.
-3. **temp 디렉토리 생성**: `mktemp -d -t "techo-chrome-XXXXXX"` — 스크린샷/보고서 저장용. repo 안에 저장 금지.
+1. **dev server**: run `curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/ja`. If not 200, **hard stop** — print "The dev server is not running. Start it first with `cd frontend && npm run dev` or `docker compose up -d`." and abort.
+2. **browser connection**: call `mcp__chrome-devtools__list_pages`. On failure, **hard stop** — print "Cannot connect to Chrome DevTools MCP. Make sure Chrome is running with `--remote-debugging-port`." and abort.
+3. **temp directory**: `mktemp -d -t "techo-chrome-XXXXXX"` — for screenshots / reports. Do not store inside the repo.
 
-## Step 1 — 데스크톱 검증 (locale: ja)
+## Step 1 — Desktop (PC) verification (locale: ja)
 
-각 대상 페이지에 대해 1a~1d 를 순서대로 실행한다.
+Always run unless scope is `sp-only`. For each target page, run 1a–1d in order.
 
-### 1a. 페이지 탐색 + 로드 확인
-
-```
-mcp__chrome-devtools__navigate_page  url=http://localhost:3000/ja{path}
-```
-
-`mcp__chrome-devtools__wait_for` 로 핵심 텍스트 로드를 확인:
-- home: 카테고리명 또는 검색 placeholder
-- nearby: "リスト" 또는 "マップ"
-- bookmarks: "ブックマーク" 또는 로그인 안내
-- prefecture: 도도부현명
-- detail: 시설명
-- search: 검색 입력 필드
-
-### 1b. 접근성 트리 스냅샷
-
-```
-mcp__chrome-devtools__take_snapshot
-```
-
-스냅샷에서 `docs/0406_REGRESSION_CHECKLIST.md` 실패 조건을 검증:
-
-- **raw slug 노출**: `mental`, `physical`, `public`, `sport` 등 내부 enum 이 라벨 없이 노출되면 FAIL
-- **거짓 카운트**: API 실패 시 "0件"/"0건" 표시 대신 fallback/unavailable 이어야 함
-- **접근성 역할**: 주요 UI 요소의 role 이 올바른지 (button, link, navigation, tab)
-- **locale 일관성**: 현재 locale 과 맞지 않는 문자열 잔류 여부
-
-### 1c. 콘솔 에러 확인
-
-```
-mcp__chrome-devtools__list_console_messages  types=["error","warn"]
-```
-
-- `error` 레벨 → **FAIL** (단, hydration mismatch 경고·개발 전용 경고는 known-issue 로 표기)
-- `Failed to fetch`, `NetworkError`, `CORS` 메시지 → 즉시 **FAIL**
-- `warn` 레벨 → 보고하되 FAIL 아님
-
-### 1d. 네트워크 요청 확인
-
-```
-mcp__chrome-devtools__list_network_requests  resourceTypes=["fetch","xhr"]
-```
-
-- 4xx/5xx 응답 → **FAIL**
-- home: `/v1/prefectures/regions`, `/v1/facility-types` 요청 존재 확인
-- nearby: `/v1/map/clusters` 요청에 `lat`, `lng`, `radius_km` 파라미터 포함 확인
-- detail: `/v1/facilities/{id}` 요청 존재 확인
-
-## Step 2 — 모바일 검증
-
-scope 가 `mobile`, `full` 이거나, diff 에 레이아웃/CSS 변경이 포함되면 실행. 아니면 스킵.
-
-### 2a. 모바일 에뮬레이션 설정
-
-```
-mcp__chrome-devtools__emulate  viewport="390x844x3,mobile,touch"
-```
-
-### 2b. 각 대상 페이지 재검증
-
-Step 1a~1d 반복. 추가로 스냅샷에서:
-
-- 하단 `MobileTabBar` 가 콘텐츠를 가리지 않는지
-- nearby: 반경 토글과 검색 입력 겹침 여부
-- home: 검색 placeholder 가 충분한 폭 확보
-- 탭 전환 후 빈 화면이 아닌지
-
-### 2c. 데스크톱 복원
+First set the desktop viewport:
 
 ```
 mcp__chrome-devtools__emulate  viewport="1280x800x1"
 ```
 
-## Step 3 — 다국어 검증
+### 1a. Navigate + load check
 
-scope 가 `full` 이거나 `messages/` 변경이 있으면 실행. 아니면 스킵.
+```
+mcp__chrome-devtools__navigate_page  url=http://localhost:3000/ja{path}
+```
 
-대상: `en`, `ko` (ja 는 Step 1 완료).
+Use `mcp__chrome-devtools__wait_for` to confirm the key text has loaded:
+- home: category name or search placeholder
+- nearby: "リスト" or "マップ"
+- bookmarks: "ブックマーク" or login prompt
+- prefecture: prefecture name
+- detail: facility name
+- search: search input field
 
-각 locale 에 대해:
+### 1b. Accessibility tree snapshot
+
+```
+mcp__chrome-devtools__take_snapshot
+```
+
+Check the snapshot against the failure conditions in `docs/0406_REGRESSION_CHECKLIST.md`:
+
+- **raw slug exposure**: internal enums like `mental`, `physical`, `public`, `sport` exposed without a label → FAIL
+- **false counts**: on API failure, the UI must show fallback / unavailable, not "0件" / "0건"
+- **a11y roles**: roles on key UI elements must be correct (button, link, navigation, tab)
+- **locale consistency**: no leftover strings from a different locale
+
+### 1c. Console error check
+
+```
+mcp__chrome-devtools__list_console_messages  types=["error","warn"]
+```
+
+- `error` level → **FAIL** (hydration-mismatch warnings and dev-only warnings may be noted as known issues)
+- `Failed to fetch`, `NetworkError`, `CORS` messages → immediate **FAIL**
+- `warn` level → report but not FAIL
+
+### 1d. Network request check
+
+```
+mcp__chrome-devtools__list_network_requests  resourceTypes=["fetch","xhr"]
+```
+
+- 4xx / 5xx response → **FAIL**
+- home: confirm requests to `/v1/prefectures/regions` and `/v1/facility-types`
+- nearby: confirm `/v1/map/clusters` request includes `lat`, `lng`, `radius_km` parameters
+- detail: confirm `/v1/facilities/{id}` request
+
+## Step 2 — Mobile (SP) verification
+
+Always run unless scope is `pc-only`. By default, SP verification must follow PC.
+
+### 2a. Mobile emulation
+
+```
+mcp__chrome-devtools__emulate  viewport="390x844x3,mobile,touch"
+```
+
+### 2b. Re-verify each target page
+
+Repeat steps 1a–1d. Additionally, in the snapshot:
+
+- the bottom `MobileTabBar` does not occlude content
+- nearby: radius toggle does not overlap the search input
+- home: search placeholder has enough width
+- screen is not blank after tab switch
+
+### 2c. Restore desktop
+
+```
+mcp__chrome-devtools__emulate  viewport="1280x800x1"
+```
+
+> **Do not mark PASS based on only one of PC / SP.** Report the two viewports separately; if either fails, the overall verdict is FAIL.
+
+## Step 3 — i18n verification
+
+Run when scope is `full` or there are changes under `messages/`. Otherwise skip.
+
+Targets: `en`, `ko` (`ja` is already covered by Step 1).
+
+For each locale:
 1. `navigate_page` → `http://localhost:3000/{locale}{path}`
-2. `take_snapshot` → 접근성 트리 확인
-3. 판정: 이전 locale 텍스트 잔류 없는지, trigger/summary/preview 문자열이 현재 locale 과 일치하는지
+2. `take_snapshot` → check the accessibility tree
+3. Verdict: no leftover text from a previous locale; trigger / summary / preview strings match the current locale.
 
-## Step 4 — Lighthouse 접근성 감사
+## Step 4 — Lighthouse accessibility audit
 
-scope 가 `a11y` 또는 `full` 이면 실행. 아니면 스킵.
+Run when scope is `a11y` or `full`. Otherwise skip.
 
 ```
 mcp__chrome-devtools__lighthouse_audit  device="mobile"  mode="navigation"
@@ -138,45 +149,46 @@ mcp__chrome-devtools__lighthouse_audit  device="mobile"  mode="navigation"
 
 - Accessibility < 90 → **FAIL**
 - SEO < 80 → **WARN**
-- 개별 violation 모두 보고
+- Report every individual violation
 
-보고서 파일은 Step 0 에서 만든 temp 디렉토리에 저장.
+Save the report file to the temp directory created in Step 0.
 
-## Step 5 — 결과 요약
+## Step 5 — Result summary
 
-아래 형식으로 최종 결과 출력:
+Print the final result in this format:
 
 ```
-## /test chrome 결과
+## /test chrome result
 
-scope: <실행 범위>
-locale: <검증한 locale 목록>
-viewport: <desktop | mobile | desktop+mobile>
+scope: <executed scope>
+locale: <verified locales>
+viewport: PC + SP (default) | PC only | SP only
 
-### 페이지별 결과
+### Per-page result
 
-| 페이지 | 콘솔 | 네트워크 | 스냅샷 | 모바일 | a11y | 판정 |
-|--------|-------|----------|--------|--------|------|------|
-| /ja/   | PASS  | PASS     | PASS   | PASS   | 92   | PASS |
+| page   | PC console | PC network | PC snapshot | SP console | SP network | SP snapshot | a11y | verdict |
+|--------|------------|------------|-------------|------------|------------|-------------|------|---------|
+| /ja/   | PASS       | PASS       | PASS        | PASS       | PASS       | PASS        | 92   | PASS    |
 
-### 실패 상세 (있을 경우)
+### Failure detail (if any)
 
-- [FAIL] /ja/nearby — 콘솔 에러: "Failed to fetch /v1/map/clusters"
+- [FAIL] /ja/nearby — console error: "Failed to fetch /v1/map/clusters"
 
-### 잔여 리스크
+### Outstanding risk
 
-- 인증 흐름 미검증 (로그인 필요)
-- 저장 후 재진입 시나리오 미검증
+- auth flow not verified (login required)
+- save-then-revisit scenario not verified
 ```
 
-temp 경로를 한 줄로 보고. 실패 evidence 스크린샷이 있으면 `take_screenshot` 으로 temp 에 저장.
+Report the temp path on a single line. If you have failure-evidence screenshots, save them into temp via `take_screenshot`.
 
-## 주의사항
+## Notes
 
-- dev 서버 미실행 시 절대 진행 금지. 서버를 직접 시작하지도 말 것.
-- `take_snapshot` (접근성 트리) 우선. `take_screenshot` 은 실패 evidence 용도만.
-- 스크린샷/보고서는 repo 안에 저장 금지. `mktemp -d -t "techo-chrome-XXXXXX"` 사용.
-- 검증 실패를 "문제 없음" 으로 마무리 금지. FAIL 은 명확히 FAIL.
-- 이 스킬은 `docs/0406_REGRESSION_CHECKLIST.md` 의 보완이지 대체가 아니다. 자동화 불가 항목(저장 후 재진입, 위치 거부 등)은 잔여 리스크로 명시.
-- 인증 필요 흐름은 미로그인 fallback UI 만 검증. 로그인 자동화는 범위 밖.
-- **자동 워크플로 연동:** `/ticket*` 에서 호출 시, dev 서버 기동은 `_cycle.md` step 4a 가 사전 수행. 이 스킬 자체는 서버를 시작하지 않는다.
+- **PC + SP verification is the default.** Unless `pc-only` / `sp-only` is explicit, do not run only one side. Even if the diff looks backend-only, SP layout can be affected, so check both.
+- Never proceed when the dev server is not running. Do not start it yourself.
+- Prefer `take_snapshot` (accessibility tree). `take_screenshot` is for failure evidence only.
+- Do not save screenshots / reports inside the repo. Use `mktemp -d -t "techo-chrome-XXXXXX"`.
+- Do not close out a failed verification as "no problem". FAIL is FAIL.
+- This skill complements `docs/0406_REGRESSION_CHECKLIST.md`, it does not replace it. Items that cannot be automated (save-then-revisit, location denial, etc.) must be listed as outstanding risk.
+- For auth-required flows, only verify the unauthenticated fallback UI. Login automation is out of scope.
+- **Auto workflow integration:** when invoked from `/ticket*`, dev server startup is handled in advance by `_cycle.md` step 4a. This skill itself does not start the server.

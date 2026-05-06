@@ -1,65 +1,65 @@
-# /ticket — 특정 JIRA 티켓 진입
+# /ticket — enter a specific JIRA ticket
 
-> `jira.enabled` 가 `false` 이면 "JIRA 미설정. `.claude/project.json` 에 `jira` 섹션을 추가하세요" 출력 후 종료.
+> If `jira.enabled` is `false`, print "JIRA not configured. Add a `jira` section to `.claude/project.json`" and exit.
 
-인자로 받은 티켓 번호(`{projectKey}-<n>` 또는 `<n>`) 를 기준으로 티켓을 조회하고 현재 상태에 맞는 다음 액션을 라우팅해줘.
+Look up the ticket by the argument (`{projectKey}-<n>` or `<n>`) and route to the next action that matches its current state.
 
-## Step 0: 프로젝트 설정 로드
+## Step 0: Load project config
 
-§ `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_config.md` 참조로 설정 로드.
+§ `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_config.md`.
 
-## 인자 형식
+## Argument forms
 
 - `/ticket {projectKey}-42`
 - `/ticket 42`
-- `/ticket {projectKey}-42` (대소문자 무시)
+- `/ticket {projectKey}-42` (case-insensitive)
 
-## 실행 순서
+## Run order
 
-1. 인자 파싱:
-   - 숫자만 들어오면 `{projectKey}-<숫자>` 로 보정.
-   - `{projectKey}-` prefix 는 대문자로 정규화.
-   - 유효하지 않으면 올바른 형식을 안내하고 중단.
-2. 티켓 조회: `mcp__claude_ai_Atlassian_Rovo__getJiraIssue` 로 `summary / status / priority / issuetype / labels / assignee / description` 확인.
-3. 에픽(`{epicIssueType}` 타입) 처리: 직접 구현 대상이 아니므로 자식 티켓(`parent = {projectKey}-<n> AND statusCategory != Done`) 을 `/ticket:list` 형식으로 출력 후, 자식 중 하나를 `/ticket <자식-n>` 으로 다시 호출하도록 안내하고 종료.
-4. Worktree 위치 판정 — 병렬 실행: `git rev-parse --show-toplevel`, `git status --short`, `git branch --show-current`, `git worktree list --porcelain`, `git fetch origin --quiet`.
-   - cwd 가 해당 티켓 sibling worktree (`feat/{projectKey}-<n>-*` 또는 `fix/{projectKey}-<n>-*`) 안이면:
-     - `git status --short` **clean** → 재사용하고 step 5 진입.
-     - **dirty** → **하드 스탑**. 변경 파일 목록을 보고하고 사용자가 (a) 해당 worktree 에서 커밋, (b) `git stash push -u -m "pre-ticket-{projectKey}-<n>"`, (c) `git restore` / `git clean` (명백히 버릴 수 있는 경우) 중 하나로 정리한 뒤 `/ticket` 을 재실행하도록 안내.
-   - cwd 가 다른 티켓 / chore sibling worktree 안이면 **하드 스탑** — "main repo 로 이동 후 재실행" 안내.
-   - cwd 가 main repo root 이고 브랜치가 `{baseBranch}` 이면 step 6-i-3 에서 sibling worktree 를 새로 만든다.
-   - cwd 가 main repo root 인데 브랜치가 `{baseBranch}` 이 아니면 **하드 스탑** — `git checkout {baseBranch}` 후 재실행 안내.
-5. **오케스트레이터 분류** — § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_orchestrator.md` 참조.
+1. Parse argument:
+   - Numbers-only input is normalized to `{projectKey}-<n>`.
+   - The `{projectKey}-` prefix is uppercased.
+   - On invalid input, print the correct format and abort.
+2. Fetch ticket: use `mcp__claude_ai_Atlassian_Rovo__getJiraIssue` to inspect `summary / status / priority / issuetype / labels / assignee / description`.
+3. Epic (`{epicIssueType}` type) handling: not directly implementable, so list children (`parent = {projectKey}-<n> AND statusCategory != Done`) in `/ticket:list` form, advise re-invocation as `/ticket <child-n>` for one of the children, and exit.
+4. Determine worktree location — run in parallel: `git rev-parse --show-toplevel`, `git status --short`, `git branch --show-current`, `git worktree list --porcelain`, `git fetch origin --quiet`.
+   - If cwd is inside this ticket's sibling worktree (`feat/{projectKey}-<n>-*` or `fix/{projectKey}-<n>-*`):
+     - `git status --short` **clean** → reuse and proceed to step 5.
+     - **dirty** → **hard stop**. Report changed files and tell the user to clean up via (a) committing in that worktree, (b) `git stash push -u -m "pre-ticket-{projectKey}-<n>"`, or (c) `git restore` / `git clean` (when clearly disposable), then re-run `/ticket`.
+   - If cwd is inside another ticket / chore sibling worktree, **hard stop** — advise "move to main repo and re-run".
+   - If cwd is the main repo root and branch is `{baseBranch}`, step 6-i-3 will create a fresh sibling worktree.
+   - If cwd is the main repo root but branch is not `{baseBranch}`, **hard stop** — advise `git checkout {baseBranch}` and re-run.
+5. **Orchestrator classification** — § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_orchestrator.md`.
 
-   **`next_command` 처리 (ticket.md 전용)**: 반환값이 `/ticket` 이 아닌 다른 슬래시 커맨드면 **진행 중단** 후 사용자에게 "오케스트레이터가 `<next_command>` 를 권고함 — 해당 커맨드로 재시작하세요" 안내. Claude 가 자발적으로 라우팅을 override 하지 말 것.
+   **`next_command` handling (ticket.md only)**: if the return is a slash command other than `/ticket`, **abort** and tell the user "Orchestrator recommended `<next_command>` — restart with that command". Claude must not override the routing on its own.
 
-   메인 세션은 반환된 `owner` 로 step 6-i-4 의 역할 문서 참조를 고정.
+   The main session pins the role-doc reference in step 6-i-4 to the returned `owner`.
 
-6. 현재 티켓 상태 기반 라우팅:
-   - `To Do` / `In Progress` / `QA FAILED` → 구현 준비:
-     1. 세션 타이틀에 `[{projectKey}-<n>]` 접두사 부여: `/rename` 슬래시 커맨드를 사용해 현재 세션 타이틀을 `[{projectKey}-<n>] <기존 타이틀 또는 티켓 summary 요약>` 형태로 변경. 이미 `[{projectKey}-<n>]` 접두사가 붙어 있으면 재설정하지 않음. (다른 `[{projectKey}-*]` 접두사가 있으면 새 티켓 번호로 교체.)
-     2. 본문에 `## Done Criteria` / `## Out of Scope` / `## Verification` 섹션이 없으면 `editJiraIssue` 로 보강.
-     2.5. **핵심 설계 결정 사전 점검** (design-heavy 티켓 한정):
-        - 라벨에 `data-quality` / `data` / `data-pipeline` / `schema` / `api` / `backend` / `migration` / `llm` / `facet` 중 1개 이상 포함하면 design-heavy ticket 으로 분류.
-        - description 의 `## 핵심 설계 결정` 섹션 검사:
-          - **부재** → opus 가 description 분석해서 빠진 항목 (멀티값 컬럼 형식, breaking change 정책, 응답 직렬화, idempotency 등) 1~3개 추출 → `AskUserQuestion` 으로 사용자에게 결정 요청.
-          - **존재하지만 빈 항목 (`<TBD>` / `?` / 빈 줄)** 있으면 빈 항목만 추출해서 동일하게 사용자 확인.
-          - **모든 항목 채워짐** → 점검 통과, i-3 으로 진행.
-        - 사용자 답변 받은 후 `editJiraIssue` 로 description 갱신 (기존 섹션이 없으면 신설, 있으면 빈 항목 자리에 답변 삽입).
-        - **사용자가 "잘 모름 / impl-coder 자율" 선택**: description 에 그 명시 (`판단: impl-coder 자율, codex finding 발생 시 follow-up 분리`) — 이후 cycle 의 codex 라운드 sprawl 시 force-ack / follow-up 분리 정당화. 점검은 통과로 처리.
-        - **목적**: TM-231 사례 (codex 13라운드, 1h 27m, finding 50%+ 가 단일 설계 결정 누락에서 cascade) 같은 sprawl 차단. 사이클 시작 전 결정을 잠그는 게 핵심.
-        - **자동 흐름 (`/ticket:auto` / `/ticket:batch`) 에서 i-2.5**: AskUserQuestion 호출 시 자동 흐름이 잠시 멈춤 — 의도된 동작. 자동 흐름의 design-heavy 처리 변경은 별도 follow-up.
-     3. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_worktree.md` "생성/재개" 참조.
-     4. 티켓이 `To Do` 면 `getTransitionsForJiraIssue` → `Start work` → `transitionJiraIssue` 로 `In Progress`.
-     5. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` 참조 (Phase 1 → Phase 2 순차 실행).
-   - `READY FOR QA` → 티켓 `## Verification` 섹션과 직전 `검증 요약` 코멘트의 SKIP/잔여 리스크 항목을 출력하고 수동 QA 체크 가이드 제공. (현 정책상 3중 리뷰가 모두 PASS / N/A 인 티켓은 `_cycle.md` step 10 에서 바로 Done 으로 전환되므로, READY FOR QA 에 도착한 티켓은 거의 항상 환경 의존 SKIP 또는 잔여 리스크가 있는 케이스다 — 그 부분 위주로 점검. N/A 처리된 항목은 자동으로 PASS 효력으로 통과했으므로 여기서 다시 검증할 필요 없음.) 통과 시 `getTransitionsForJiraIssue` → `Mark Done` → `transitionJiraIssue`. 실패 시 `Fail QA` 로 전환하고 원인 코멘트 요청.
-   - `Done` / `CLOSED` → 요약만 출력하고 "이미 완료된 티켓" 임을 안내. 재작업이 필요하면 새 티켓(`/ticket:create`) 생성을 권장.
+6. Route based on current ticket state:
+   - `To Do` / `In Progress` / `QA FAILED` → ready to implement:
+     1. Prefix the session title with `[{projectKey}-<n>]`: use the `/rename` slash command to set the current session title to `[{projectKey}-<n>] <existing title or summary digest>`. If the `[{projectKey}-<n>]` prefix is already present, do not reset. (If a different `[{projectKey}-*]` prefix is present, replace it with the new ticket number.)
+     2. If the body lacks `## Done Criteria` / `## Out of Scope` / `## Verification`, augment via `editJiraIssue`.
+     2.5. **Pre-check key design decisions** (design-heavy tickets only):
+        - If labels include one or more of `data-quality` / `data` / `data-pipeline` / `schema` / `api` / `backend` / `migration` / `llm` / `facet`, classify as a design-heavy ticket.
+        - Inspect the `## Key design decisions` section in the description:
+          - **Absent** → opus analyzes the description, extracts 1–3 missing items (multi-value column format, breaking-change policy, response serialization, idempotency, etc.) → ask the user via `AskUserQuestion`.
+          - **Present but with empty items (`<TBD>` / `?` / blank lines)** → extract only the empty items and ask the user the same way.
+          - **All items filled** → check passes, proceed to i-3.
+        - After receiving the user's answer, update the description via `editJiraIssue` (create the section if absent, fill empty slots with the answer).
+        - **If the user picks "not sure / impl-coder discretion"**: state it explicitly in the description (`Decision: impl-coder discretion, split codex findings to follow-ups`) — this justifies force-ack / follow-up split during later codex sprawl in the cycle. Treat the check as passed.
+        - **Purpose**: prevent sprawl like the TM-231 case (codex 13 rounds, 1h 27m, 50%+ findings cascading from a single missing design decision). The point is to lock the decision before the cycle starts.
+        - **i-2.5 in automated flows (`/ticket:auto` / `/ticket:batch`)**: the `AskUserQuestion` call pauses the auto flow — intended behavior. Changes to design-heavy handling in auto flows are tracked as separate follow-ups.
+     3. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_worktree.md` "create/resume".
+     4. If the ticket is `To Do`, run `getTransitionsForJiraIssue` → `Start work` → `transitionJiraIssue` to `In Progress`.
+     5. § `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` (run Phase 1 → Phase 2 sequentially).
+   - `READY FOR QA` → print the ticket's `## Verification` section and the SKIP/outstanding-risk items in the most recent `verification summary` comment, then provide a manual QA checklist. (Per current policy, tickets where all three reviews are PASS / N/A transition straight to Done at `_cycle.md` step 10, so a ticket arriving at READY FOR QA almost always has env-dependent SKIPs or outstanding risk — focus checks there. Items marked N/A automatically passed and need not be re-verified.) On pass, run `getTransitionsForJiraIssue` → `Mark Done` → `transitionJiraIssue`. On fail, transition to `Fail QA` and request a root-cause comment.
+   - `Done` / `CLOSED` → print summary only and note "ticket already complete". For rework, recommend creating a new ticket via `/ticket:create`.
 
-## 주의사항
+## Notes
 
-- `/ticket` 은 단일 티켓 진입점. `/ticket:create`(신규), `/ticket:list`(백로그 요약), `/ticket:auto`(자동 루프) 와 역할이 다르다.
-- main repo (repo-root) 는 항상 `{baseBranch}` 를 유지. `/ticket` 은 절대 main repo 를 feature/fix 브랜치로 체크아웃하지 않으며, 티켓 작업은 전적으로 sibling worktree (`<repo-root>/../{repoSlug}-{projectKey}-<n>-<slug>`) 안에서 진행한다.
-- 상태 전환 실패(권한·transition 조건 미충족) 시 코멘트로 블로커를 기록하고 진행 중단.
-- transition id 는 프로젝트 설정 변경에 따라 바뀌므로 `getTransitionsForJiraIssue` 응답에서 이름으로 매칭.
-- PR 머지 자체를 완료로 취급하지 말 것. `Mark Done` 전환은 QA 통과 후에만.
-- design-heavy 티켓 (data/api/schema/migration/llm/facet 라벨) 은 step 6 i-2.5 의 사전 점검 통과 필수. 점검 우회는 사용자 명시 결정 시점에만 (예: "impl-coder 자율" 응답).
+- `/ticket` is the single-ticket entry point. Distinct from `/ticket:create` (new), `/ticket:list` (backlog summary), and `/ticket:auto` (auto-loop).
+- The main repo (repo-root) always stays on `{baseBranch}`. `/ticket` never checks out a feature/fix branch on the main repo; ticket work happens entirely inside the sibling worktree (`<repo-root>/../{repoSlug}-{projectKey}-<n>-<slug>`).
+- On transition failure (permission / unmet transition condition), record the blocker as a comment and abort.
+- Transition IDs change with project config, so match by name in the `getTransitionsForJiraIssue` response.
+- Do not treat a PR merge as completion. Only run `Mark Done` after QA pass.
+- Design-heavy tickets (data/api/schema/migration/llm/facet labels) must pass the step 6 i-2.5 pre-check. Bypass only on explicit user decision (e.g. "impl-coder discretion" answer).

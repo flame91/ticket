@@ -1,113 +1,113 @@
-# /ticket:batch:plan — 입력 큐 분할 제안 (read-only)
+# /ticket:batch:plan — Input queue split suggestion (read-only)
 
-> `jira.enabled` 가 `false` 이면 "JIRA 미설정. `.claude/project.json` 에 `jira` 섹션을 추가하세요" 출력 후 종료.
+> If `jira.enabled` is `false`, print "JIRA not configured. Add a `jira` section to `.claude/project.json`" and exit.
 
-지정 키 리스트를 분석해 의존성·진행상태·라벨 기준으로 **여러 `/ticket:batch` 호출로 분할 제안**한다. 실제 실행은 하지 않는 read-only 모드 — 사용자가 출력된 명령을 직접 복사해 실행한다.
+Analyzes a given key list and **suggests splitting into multiple `/ticket:batch` invocations** based on dependencies, progress state, and labels. Read-only mode that does not actually execute — the user copies and runs the printed commands themselves.
 
-`/ticket:batch` 의 `--par` 모드는 입력 큐를 그대로 받아 동시에 돌린다 (자동 묶음 판단 없음). 이 스킬은 batch 직접 호출 전 "어떻게 묶을지" 권장안을 미리 산출하는 용도.
+`/ticket:batch`'s `--par` mode takes the input queue as-is and runs concurrently (no auto-grouping). This skill pre-computes a "how to group" recommendation before invoking batch directly.
 
-## 인자
+## Arguments
 
-| 형식 | 의미 |
+| Form | Meaning |
 |---|---|
-| `/ticket:batch:plan TM-a,TM-b,...` | 쉼표 구분 키 리스트 |
-| `/ticket:batch:plan 182,183` | 숫자만 입력 시 `{projectKey}-<n>` 으로 자동 보정 |
-| `/ticket:batch:plan TM-a, TM-b` | 공백 허용 (trim) |
+| `/ticket:batch:plan TM-a,TM-b,...` | Comma-separated key list |
+| `/ticket:batch:plan 182,183` | Numbers only are auto-normalized to `{projectKey}-<n>` |
+| `/ticket:batch:plan TM-a, TM-b` | Whitespace allowed (trim) |
 
-최소 2개 이상 필요. 1개면 `/ticket <{projectKey}-n>` 안내 후 종료.
+At least 2 keys required. If 1 key, print `/ticket <{projectKey}-n>` guidance and exit.
 
 ---
 
-## Step 0: 프로젝트 설정 로드
+## Step 0: Load project config
 
-§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_config.md 참조.
+See § ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_config.md.
 
-## Step 1: 인자 파싱
+## Step 1: Parse arguments
 
-쉼표 split → trim → `{projectKey}-<n>` 정규화 → 중복 제거 (입력 순서 유지).
-빈 리스트 / 1개 / 유효하지 않은 포맷이면 안내 후 종료.
+Comma split → trim → normalize to `{projectKey}-<n>` → dedupe (preserving input order).
+If list is empty / single / invalid format, print guidance and exit.
 
-## Step 2: 메타데이터 수집 (키별 1회 `getJiraIssue`)
+## Step 2: Collect metadata (one `getJiraIssue` per key)
 
-각 키에 대해 다음 필드만 조회 (가볍게):
+For each key, query only these fields (lightweight):
 `summary, status, issuetype, parent, issuelinks, labels, priority`
 
-## Step 3: 분류
+## Step 3: Classify
 
-각 키를 카테고리로 분류:
+Classify each key into a category:
 
-| 카테고리 | 조건 | 처리 |
+| Category | Condition | Handling |
 |---|---|---|
-| `runnable` | status ∈ {To Do, READY FOR DEV} 이고 issuetype != `{epicIssueType}` | runnable 큐에 적재 |
-| `in-progress` | status == In Progress | 스킵 (이유: 현 worktree 진행 중, 별도 처리) |
-| `ready-for-qa` | status == "READY FOR QA" | 스킵 (이유: 수동 `/ticket <{projectKey}-n>` 권장) |
-| `already-done` | statusCategory == Done | 스킵 |
-| `epic-excluded` | issuetype == `{epicIssueType}` | 스킵 |
-| `not-found` | API 미존재 / 권한 오류 | 스킵 |
+| `runnable` | status ∈ {To Do, READY FOR DEV} and issuetype != `{epicIssueType}` | Add to runnable queue |
+| `in-progress` | status == In Progress | Skip (reason: current worktree active, handle separately) |
+| `ready-for-qa` | status == "READY FOR QA" | Skip (reason: manual `/ticket <{projectKey}-n>` recommended) |
+| `already-done` | statusCategory == Done | Skip |
+| `epic-excluded` | issuetype == `{epicIssueType}` | Skip |
+| `not-found` | API missing / permission error | Skip |
 
-## Step 4: 의존성 그래프 빌드
+## Step 4: Build dependency graph
 
-`runnable` 큐에 한해:
-- `issuelinks` 에서 `type.name ∈ {"Blocks", "Depends", "is blocked by"}` 항목 추출
-- linked key 가 같은 runnable 큐 내부에 있는 경우만 엣지로 사용 (외부 키 의존성은 정보성 표시)
-- 사이클 검출 시 → "의존성 사이클 감지: TM-x ↔ TM-y" 보고 후 종료
+For the `runnable` queue only:
+- Extract from `issuelinks` items where `type.name ∈ {"Blocks", "Depends", "is blocked by"}`
+- Use as edge only if the linked key is also inside the same runnable queue (external key dependencies are shown as info)
+- On cycle detection → report "Dependency cycle detected: TM-x ↔ TM-y" and exit
 
-## Step 5: 위상 정렬 + 레벨 분할
+## Step 5: Topological sort + level split
 
-DAG 위상 정렬 → 레벨별 그룹화. 레벨 N 의 키들은 서로 독립이라 `--par` 후보, 레벨 간은 순차.
+DAG topological sort → group by level. Keys at level N are mutually independent → `--par` candidates; across levels is sequential.
 
-## Step 6: 그룹 내 추가 분할 (5개 청크)
+## Step 6: Further split within group (5-key chunks)
 
-각 레벨 내 키 K개:
+For K keys at each level:
 
-| K | 권장 호출 |
+| K | Recommended call |
 |---|---|
-| 1 | `/ticket <키>` (단일 batch 의미 없음) |
-| 2-5 | `/ticket:batch --par <키1>,<키2>,...` |
-| 6+ | 입력 순서대로 5개씩 청크 분할, 각 청크가 독립 `--par` |
+| 1 | `/ticket <key>` (single-key batch is meaningless) |
+| 2-5 | `/ticket:batch --par <key1>,<key2>,...` |
+| 6+ | Chunk into 5 by input order, each chunk an independent `--par` |
 
-## Step 7: 휴리스틱 경고 (강제 분할 아님, 표시만)
+## Step 7: Heuristic warnings (no forced split, display only)
 
-다음 패턴은 ⚠️ 로 보고하지만 분할은 강제하지 않음:
+The following patterns are reported with ⚠️ but do not force a split:
 
-- **size-l 다중 동시 실행**: 같은 그룹에 size-l 라벨 2개 이상 → "큰 변경끼리 동시 머지 시 회귀 검증 부담. 분리 권장"
-- **같은 EPIC + 같은 area-***: parent 가 같고 area-* 라벨이 일치하는 키 2개 이상 → "같은 파일 영역 충돌 가능성"
-- **priority Highest 단독**: Highest 1개가 다른 키와 묶임 → "실패 영향 최소화 위해 단독 권장"
-- **외부 의존성**: linked key 가 큐 외부 + status != Done → "TM-x 미완료 상태로 시작 시 블로킹 위험"
+- **Multiple size-l running concurrently**: 2+ size-l labels in the same group → "Concurrent merges of large changes burden regression validation. Recommend separating"
+- **Same EPIC + same area-***: 2+ keys with the same parent and matching area-* label → "Possible same-file-region conflict"
+- **Lone Highest priority**: a single Highest bundled with other keys → "Recommend running alone to minimize failure impact"
+- **External dependency**: linked key outside the queue + status != Done → "Risk of blocking if started while TM-x is incomplete"
 
-## Step 8: 출력 형식
+## Step 8: Output format
 
 ```
-=== /ticket:batch 분할 제안 ===
+=== /ticket:batch split suggestion ===
 
-입력: N개
-runnable: K개
-스킵: M개
+Input: N keys
+runnable: K
+skipped: M
 
-분할 plan (총 P개 호출):
+Split plan (P calls total):
 
-[1/P] sequential — <근거 요약>
+[1/P] sequential — <reason summary>
   /ticket:batch <key1>,<key2>
-  근거: <key1> blocks <key2>
+  reason: <key1> blocks <key2>
 
-[2/P] parallel — <근거 요약>
+[2/P] parallel — <reason summary>
   /ticket:batch --par <key3>,<key4>,<key5>
-  근거: 같은 EPIC <parent>, 의존성 링크 없음, 모두 size-m
+  reason: same EPIC <parent>, no dependency links, all size-m
 
-[3/P] sequential — <근거 요약>
+[3/P] sequential — <reason summary>
   /ticket:batch <key6>,<key7>
-  근거: 둘 다 size-l, 회귀 격리 위해 순차
+  reason: both size-l, sequential to isolate regressions
 
-스킵 항목:
-  TM-x: in-progress (현 worktree 진행 중)
+Skipped:
+  TM-x: in-progress (current worktree active)
   TM-y: epic-excluded
   TM-z: already-done
 
-⚠️ 주의:
-  TM-c, TM-d 모두 frontend area-* 라벨 + 같은 EPIC <parent> — 같은 파일 영역 가능성
-  TM-f 외부 의존: TM-200 (To Do) 미완료 상태로 시작 시 블로킹 위험
+⚠️ Caveats:
+  TM-c, TM-d both have frontend area-* labels + same EPIC <parent> — possible same-file-region overlap
+  TM-f external dependency: TM-200 (To Do) — risk of blocking if started while incomplete
 
-복사 실행:
+Copy & run:
   /ticket:batch <key1>,<key2>
   /ticket:batch --par <key3>,<key4>,<key5>
   /ticket:batch <key6>,<key7>
@@ -115,11 +115,11 @@ runnable: K개
 
 ---
 
-## 안전장치 / 한계
+## Safeguards / limits
 
-- **read-only**. orchestrator / worktree / cycle 호출 금지. JIRA `getJiraIssue` 만 사용.
-- 실제 실행은 사용자 책임. plan 출력을 자동 실행하지 않는다.
-- `issuelinks` 가 누락된 의존성은 잡지 못함 — 사용자가 필드 보강 후 재실행 권장.
-- 파일 영역 충돌 추정은 라벨 기반 휴리스틱이라 정확하지 않음. 실 충돌 여부는 머지 시점에 판별.
-- worktree / merge race / port 3000 충돌 등 batch 실행 중 안전장치는 `_cycle.md` Phase 2 순차 보장으로 처리되므로 plan 단계에서 검증하지 않음.
-- 그룹 청크 사이즈(5)는 `parallel.maxConcurrent` 의 상한 (기본 3, 최대 5) 과 별개. plan 은 추천만 하고, 실 실행은 batch.md 의 `{maxConcurrent}` 가 적용된다.
+- **read-only**. Must not invoke orchestrator / worktree / cycle. Uses only JIRA `getJiraIssue`.
+- Actual execution is the user's responsibility. Plan output is not auto-run.
+- Dependencies missing from `issuelinks` are not detected — user should fill the field and re-run.
+- File-region conflict estimation is a label-based heuristic, not exact. Real conflicts are determined at merge time.
+- Worktree / merge race / port 3000 collision and other in-flight batch safeguards are handled by `_cycle.md` Phase 2 sequential guarantees, so they are not validated at the plan stage.
+- The group chunk size (5) is independent of `parallel.maxConcurrent`'s ceiling (default 3, max 5). Plan only recommends; actual execution applies `{maxConcurrent}` as defined in batch.md.
