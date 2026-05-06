@@ -5,6 +5,25 @@ All notable changes to the ticket plugin will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-05-06
+
+### Changed
+
+- `/ticket:rerank` now writes ranks via `mcp__claude_ai_Atlassian_Rovo__editJiraIssue` instead of curl + JIRA Agile REST API. Lexorank values for non-anchor tickets are computed by appending a 2-character base-36 suffix to the proposed-position-0 ticket's current rank — no curl, no separate API token, no Lexorank library. Auth reuses the same MCP context already used by every other ticket-plugin command.
+
+### Removed
+
+- `jira.restApi.{enabled, userEmail, tokenFile}` config block (introduced in 0.1.2). No longer needed — the MCP path requires no separate REST credentials.
+- `jira.site` config field (introduced in 0.1.2). No longer needed — `editJiraIssue` resolves the host via `cloudId`.
+
+### Added
+
+- `jira.rankFieldId` config field — the custom-field ID of the Lexorank "Rank" field. Default `customfield_10019` (standard JIRA Software company-managed). Override only if your instance reports a different ID.
+
+### Notes
+
+If you set up `jira.restApi` and `jira.site` for 0.1.2, you can remove both blocks — they are now ignored. `jira.attachmentApi` is unrelated and still in use by `/push` step 11b.
+
 ## [0.1.2] - 2026-05-06
 
 ### Added
@@ -39,6 +58,7 @@ The `v0.1.0` git tag was issued on 2026-05-06 for commit `a5ae50b`. That commit 
 - **Skills**: `diagnose`, `grill-with-docs`
 - **Scripts**: `session-state.sh`, `install-symlinks-home.sh`
 
+[0.1.3]: https://github.com/flame91/ticket/releases/tag/v0.1.3
 [0.1.2]: https://github.com/flame91/ticket/releases/tag/v0.1.2
 [0.1.1]: https://github.com/flame91/ticket/releases/tag/v0.1.1
 [0.1.0]: https://github.com/flame91/ticket/releases/tag/v0.1.0
