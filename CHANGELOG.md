@@ -5,6 +5,18 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-05-08
+
+### Added
+
+- `/flow:slop-clean` — remove AI-generated code smells (useless comments, over-defensive guards, excessive nesting) from files changed in the current branch vs `{baseBranch}`. Dispatches one `slop-cleaner` subagent per file in parallel (capped at `parallel.maxConcurrent`), aggregates per-file reports, then runs a critical review pass (Safety / Behaviour / Project rules) against the cumulative diff. Read-only on anything not touched by the current branch; never auto-commits.
+- `slop-cleaner` subagent (sonnet, Read/Edit/Bash/Grep/Glob) — single-file slop removal worker; refuses multi-path or generated-file inputs.
+- `slop-clean` skill — clean-room detection rulebook covering useless comments, over-defensive code, excessive nesting, plus aesthetic-clinic-specific rules (i18n keys, color tokens, module boundaries, type safety, server-first). Inspired by oh-my-openagent's `ai-slop-remover` (SUL-1.0); attribution noted in `skills/slop-clean/SKILL.md`.
+
+### Notes
+
+- Manual step. Not auto-invoked by `/ticket` or `/push` in this release. Recommended placement: between implementation and `/push`. Combine with `/review` for full pre-push self-check.
+
 ## [0.2.4] - 2026-05-07
 
 ### Added

@@ -1,6 +1,6 @@
 # flow
 
-> Current version: **v0.2.3** — see [CHANGELOG.md](CHANGELOG.md).
+> Current version: **v0.2.5** — see [CHANGELOG.md](CHANGELOG.md).
 >
 > Renamed from `ticket` in v0.2.0 to fix the `/ticket:ticket:*` namespace doubling. Slash commands now resolve as `/flow:ticket`, `/flow:push`, `/flow:ticket:list`, etc.
 
@@ -34,17 +34,20 @@ Anthropic's Claude Code CLI.
 - `/test` — change-scoped regression tests
 - `/test chrome` — Chrome DevTools MCP browser verification
 - `/review` — pre-PR self-review (read-only findings)
+- `/slop-clean` — remove AI-generated slop (useless comments, over-defensive guards, excessive nesting) from current branch changes; one parallel agent per file + critical review pass
 
 **Subagents**
 
 - `impl-coder` — implements ticket Done Criteria, reflects review findings (sonnet)
 - `qa-verifier` — findings-first read-only review (opus)
 - `executive-orchestrator` — 5-field routing classification (sonnet)
+- `slop-cleaner` — remove AI slop from a single file (sonnet); used by `/slop-clean`
 
 **Bundled skills (own)**
 
 - `diagnose` — disciplined debugging loop (HITL template included)
 - `grill-with-docs` — challenge a plan against CONTEXT.md / ADRs
+- `slop-clean` — AI slop detection criteria (used by `/slop-clean` and `slop-cleaner`)
 
 **Bundled scripts**
 
