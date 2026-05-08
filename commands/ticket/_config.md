@@ -20,6 +20,7 @@ Read `.claude/project.json` from the repo root. If `jira.enabled` is `false` or 
 | `{skillKarpathy}` | `skillIntegration.karpathyGuidelinesInImpl` | `false` |
 | `{skillDiagnose}` | `skillIntegration.diagnoseOnTestFail` | `false` |
 | `{skillSimplify}` | `skillIntegration.simplifyBeforeCommit` | `false` |
+| `{skillSlopClean}` | `skillIntegration.slopCleanBeforeCommit` | `false` |
 | `{skillGrillDocs}` | `skillIntegration.grillWithDocsBeforeOrchestrator` | `false` |
 | `{skillReleaseNotes}` | `skillIntegration.releaseNotesOnUserFacing` | `false` |
 | `{jiraAttachmentEnabled}` | `jira.attachmentApi.enabled` | `false` |
@@ -49,6 +50,7 @@ The `skillIntegration` object in `.claude/project.json` opt-ins auxiliary skills
 | `karpathyGuidelinesInImpl` | impl-coder delegation (`§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 2) | Inject an `andrej-karpathy-skills:karpathy-guidelines` reference line into the system prompt. Lightweight. Recommended ON by default. |
 | `diagnoseOnTestFail` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 3 (test failure) | After the first retry fails, call `/diagnose` right before the second retry to produce a root-cause hypothesis → attach to impl-coder reflect input. |
 | `simplifyBeforeCommit` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 5 (commit), just before | Call `/simplify` against the staged diff → auto-fix on missed reuse / over-abstraction. High time cost, OFF by default. |
+| `slopCleanBeforeCommit` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 5 (commit), between `git add` and `git commit`, runs **before** `simplifyBeforeCommit` | Call `/flow:slop-clean --staged` → dispatches one `slop-cleaner` agent per staged file in parallel (cap `{maxConcurrent}`); strips useless comments / over-defensive guards / excessive nesting; runs Safety / Behaviour / Project-rules review against `git diff --cached`; re-stages on edit. High time cost on every commit (parallel sonnet agents), OFF by default. |
 | `grillWithDocsBeforeOrchestrator` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_orchestrator.md` step 1 (classification) | Call `/grill-with-docs` only when `invoking_command == "/ticket"` (manual entry); use the result as supplementary context for `reason`. Ignored under `/ticket:auto` · `/ticket:batch`. |
 | `releaseNotesOnUserFacing` | `§ ${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/commands/ticket/_cycle.md` step 11 (post-merge JIRA comment) | If the ticket labels include `user-facing` or `release-impacting`, attach a one-paragraph output from `pm-execution:release-notes` to the comment. |
 
