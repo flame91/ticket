@@ -145,6 +145,8 @@ curl -sS -u "${jiraRestApiEmail}:${TOKEN}" \
   -w '%{http_code}\n' -o /tmp/rerank-resp-$$.json
 ```
 
+**Top-N anchor PUT.** When the approved sequence is a strict prefix slice (`top-N` approval where N < total candidates), the per-pair loop alone cannot move `seq[0]` ahead of any non-approved candidates that originally sat above it. Concretely: source `[X, A, C, B, D]`, approved `top-3 = [A, B, C]`, per-pair loop produces `[X, A, B, C, D]` — A is still under X. Fix: **before** the per-pair loop, issue one extra PUT with `rankBeforeIssue = first_non_approved.key` and `issues = [seq[0].key]`, where `first_non_approved` is the first candidate (in current JQL Rank ASC order) that is **not** in the approved sequence. This anchors `seq[0]` immediately above the rest. Skip this PUT when the approved sequence covers the entire candidate set (no non-approved tickets) — the per-pair loop alone is correct in that case.
+
 Bash invocation: when running on macOS via the Bash tool (zsh-default shell), arrays are 1-indexed and the script will misindex. **Always wrap the loop in `bash <<'BASH' ... BASH`** to force bash semantics (0-indexed arrays, C-style `for ((i=1; i<N; i++))`).
 
 **Why per-pair, not a single batched call.** The Agile API's batch mode (multiple `issues` with one `rankAfterIssue`) places **all** listed issues immediately after the same anchor — fine for "move N tickets to one spot" but **wrong** for enforcing a total order over N tickets. Per-pair iteration is the correct primitive for "make seq[i] come right after seq[i-1] for every i".
