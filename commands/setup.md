@@ -31,6 +31,7 @@ Print one line up front:
 | `{skillKarpathy}` | `skillIntegration.karpathyGuidelinesInImpl` | `false` |
 | `{skillDiagnose}` | `skillIntegration.diagnoseOnTestFail` | `false` |
 | `{skillSimplify}` | `skillIntegration.simplifyBeforeCommit` | `false` |
+| `{skillSlopClean}` | `skillIntegration.slopCleanBeforeCommit` | `false` |
 | `{skillGrillDocs}` | `skillIntegration.grillWithDocsBeforeOrchestrator` | `false` |
 | `{skillReleaseNotes}` | `skillIntegration.releaseNotesOnUserFacing` | `false` |
 
@@ -102,17 +103,18 @@ Bind `{repoSlug}`.
 
 ### 3. skillIntegration toggles
 
-Run all five companion-availability probes (read-only) before asking, in parallel where possible:
+Run all six companion-availability probes (read-only) before asking, in parallel where possible:
 
 | Flag | Probe | Recommendation |
 |---|---|---|
 | `karpathyGuidelinesInImpl` | `find ~/.claude/plugins -type d -name 'andrej-karpathy-skills' 2>/dev/null \| head -1` | ON if installed (lightweight, no time cost) |
 | `diagnoseOnTestFail` | bundled with `flow` (skill `flow:diagnose`) — always present | ON recommended (only triggers on test failure) |
 | `simplifyBeforeCommit` | builtin `simplify` — always present | OFF recommended (high time cost on every commit) |
+| `slopCleanBeforeCommit` | bundled with `flow` (command `/flow:slop-clean`, agent `slop-cleaner`, skill `flow:slop-clean`) — always present | OFF recommended (high time cost on every commit — parallel sonnet agents per staged file) |
 | `grillWithDocsBeforeOrchestrator` | bundled with `flow` (skill `flow:grill-with-docs`) — always present; **plus** check `test -f "$REPO_ROOT/CONTEXT.md" -o -d "$REPO_ROOT/docs/adr"` | ON if `CONTEXT.md` or `docs/adr/` exists in repo |
 | `releaseNotesOnUserFacing` | `find ~/.claude/plugins -type d -name 'pm-execution' 2>/dev/null \| head -1` | ON if installed |
 
-Then make a single `AskUserQuestion` call with **5 questions** (one per flag), each `single-select` with options `On` / `Off`. Question text format:
+Then make a single `AskUserQuestion` call with **6 questions** (one per flag), each `single-select` with options `On` / `Off`. Question text format:
 
 ```
 {flag name} — {one-line effect from _config.md skillIntegration table}.
@@ -123,7 +125,7 @@ In edit mode, the current value is the first option (so `(current)` shows). Boot
 
 If a companion is missing but the user picks ON: **allow it** and print a one-line note (`Note: {companion} not detected — flag is recorded but stays a no-op until installed.`). The runtime contract in `_config.md` already degrades silently.
 
-Bind `{skillKarpathy}`, `{skillDiagnose}`, `{skillSimplify}`, `{skillGrillDocs}`, `{skillReleaseNotes}` to the chosen booleans.
+Bind `{skillKarpathy}`, `{skillDiagnose}`, `{skillSimplify}`, `{skillSlopClean}`, `{skillGrillDocs}`, `{skillReleaseNotes}` to the chosen booleans.
 
 ### 4. Diff preview + confirm
 
@@ -144,6 +146,7 @@ Bind `{skillKarpathy}`, `{skillDiagnose}`, `{skillSimplify}`, `{skillGrillDocs}`
     "karpathyGuidelinesInImpl": {skillKarpathy},
     "diagnoseOnTestFail": {skillDiagnose},
     "simplifyBeforeCommit": {skillSimplify},
+    "slopCleanBeforeCommit": {skillSlopClean},
     "grillWithDocsBeforeOrchestrator": {skillGrillDocs},
     "releaseNotesOnUserFacing": {skillReleaseNotes}
   }
@@ -198,6 +201,7 @@ Apply only:
     karpathyGuidelinesInImpl       = {skillKarpathy}
     diagnoseOnTestFail             = {skillDiagnose}
     simplifyBeforeCommit           = {skillSimplify}
+    slopCleanBeforeCommit          = {skillSlopClean}
     grillWithDocsBeforeOrchestrator= {skillGrillDocs}
     releaseNotesOnUserFacing       = {skillReleaseNotes}
 

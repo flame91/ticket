@@ -110,7 +110,12 @@ Both conditions met (AND) → **treat as N/A** — do not run `/test chrome`, sk
 
 Stage only relevant changes (exclude `.env`, secrets, unrelated generated files).
 
-If `{skillSimplify}` is `true`, immediately after `git add` and before `git commit` call `Skill(name="simplify")` or `/simplify` against the staged diff → auto-fix on missed reuse / over-abstraction / dead code. If a fix occurred, re-stage and proceed. If no fix, commit as-is. Time cost is high, so OFF by default.
+**Pre-commit hooks (run in this order, both OFF by default):**
+
+1. If `{skillSlopClean}` is `true`, after `git add` and before `git commit` call `/flow:slop-clean --staged`. This dispatches one `slop-cleaner` agent per staged file in parallel (cap `{maxConcurrent}`), strips AI-generated cosmetic smells (useless comments / over-defensive guards / excessive nesting) while preserving behaviour, then runs the Safety / Behaviour / Project-rules review pass against `git diff --cached`. If any file was edited, re-stage (`git add -u`) and proceed. If nothing changed, proceed unchanged. High time cost on every commit (parallel agents), so OFF by default.
+2. If `{skillSimplify}` is `true`, immediately after the slop-clean hook (if any) and before `git commit` call `Skill(name="simplify")` or `/simplify` against the staged diff → auto-fix on missed reuse / over-abstraction / dead code. If a fix occurred, re-stage and proceed. If no fix, commit as-is. Time cost is high, so OFF by default.
+
+Order rationale: slop-clean removes superficial AI tics (which simplify might otherwise grip onto as real abstractions); simplify then reviews the trimmed diff for genuine reuse / over-abstraction. Running them in the reverse order surfaces fewer slop hits and risks simplify making decisions on AI-puffy code.
 
 - Title: `<type>: <what> ({projectKey}-<n>)`
 - Trailer: `Co-Authored-By: Claude <noreply@anthropic.com>`

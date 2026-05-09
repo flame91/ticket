@@ -5,6 +5,19 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-05-08
+
+### Added
+
+- `/flow:slop-clean --staged` mode — non-interactive variant that scans `git diff --cached --diff-filter=AM --name-only` instead of the branch diff, skips Step 2's user-confirmation `AskUserQuestion`, and runs Step 5's review pass against `git diff --cached`. Designed for non-interactive callers (`_cycle.md` step 5).
+- `skillIntegration.slopCleanBeforeCommit` toggle (default `false`) — when ON, `_cycle.md` step 5 invokes `/flow:slop-clean --staged` between `git add` and `git commit`. Runs **before** `simplifyBeforeCommit` so simplify reviews the trimmed diff. Re-stages on edit. High time cost on every commit (parallel sonnet agents per staged file), so OFF by default — pattern matches the existing `simplifyBeforeCommit` opt-in.
+- `/flow:setup` wizard now asks 6 skillIntegration questions (was 5) and writes `slopCleanBeforeCommit` into `.claude/project.json`. Companion-availability probe always returns "bundled with flow".
+
+### Changed
+
+- `_config.md` skillIntegration table documents `slopCleanBeforeCommit`'s trigger location, ordering relative to `simplifyBeforeCommit`, and time-cost rationale.
+- `commands/slop-clean.md` Notes section updated to reflect the new optional auto-integration path (still manual when invoked without `--staged`).
+
 ## [0.2.5] - 2026-05-08
 
 ### Added
