@@ -58,12 +58,13 @@ Fetch each candidate's full **description** via `getJiraIssue` (`responseContent
 1. **Dependency graph** — search descriptions for explicit blocker/precedence patterns:
    - `블로커:` / `선행:` / `depends on` / `blocked by` / `after` followed by a `{projectKey}-N` key
    - JIRA Issue links of type `is blocked by` (visible in `getJiraIssue` with `expand=issuelinks` if needed)
-   - Topologically sort: blockers strictly precede their blockees. **Hard rule** — never place a blocked ticket above one of its blockers in the final sequence.
+   - Within each status weight bucket, topologically sort: blockers strictly precede their blockees.
+   - **Cross-bucket conflict.** If a blocker sits in a lower-priority status bucket than its blockee (e.g. a To Do prerequisite blocks an In Progress ticket), §2c forbids reordering across buckets — so the dependency invariant cannot be satisfied by reranking alone. Treat this as a workflow-state inconsistency: **abort the rerank** and report the conflicting pair with the suggested remediation (move the blockee back to a lower status, or move the blocker up). Listed as a hard-stop condition below. Never silently produce a sequence that violates the dependency invariant.
 
 2. **User-visible defect priority** — push tickets up if they meet ≥1 of:
    - `bug` or `regression` label
-   - Description contains "사용자 보고" / "user report" / "user-reported" with a date
-   - Affects the **primary locale** (`ja` for techo-map, configurable in future: `jira.primaryLocale`)
+   - Description contains "user report" / "사용자 보고" / equivalent locale-specific phrasing with a date
+   - Affects the **primary locale** if `jira.primaryLocale` is set in `.claude/project.json` (otherwise this sub-axis is skipped)
    - Hotfix / production-impacting
 
 3. **Dependency cluster grouping** — keep contiguous a chain that shares a parent epic AND has internal blockers (e.g. `backend migration → backend backfill → API exposure → frontend usage`). Don't interleave unrelated tickets between members of a tight chain even if isolated priority signals would split them.
@@ -94,7 +95,7 @@ Matches `/ticket:auto` candidate priority — see `commands/ticket/auto.md` step
 | `In Progress` | 2 |
 | `To Do` | 3 |
 
-LLM judgement may **not** override the status weight — In Progress always precedes To Do, etc. Within a bucket, the four axes apply.
+LLM judgement may **not** override the status weight — In Progress always precedes To Do, etc. Within a bucket, the four axes apply. If §2a axis 1 (dependency) requires a cross-bucket move (lower-status blocker, higher-status blockee), abort per the hard-stop table — the conflict signals a workflow-state inconsistency that reranking cannot fix.
 
 #### 2d. `--explicit` mode
 
@@ -185,6 +186,7 @@ On any 4xx mid-batch: stop, print the partial result, and warn the user that the
 | Total candidates > 50 | Warn and operate on the first 50 only (per-call API cap) |
 | `--explicit` keys mismatch the candidate set | Abort, list mismatches |
 | LLM-judgement mode hits dep cycle (A blocks B blocks A) | Abort, list the cycle, suggest fixing the description text or running `--heuristic` |
+| LLM-judgement mode hits cross-bucket dep conflict (lower-status blocker, higher-status blockee) | Abort, name the conflicting pair, suggest moving the blockee back to a lower status or promoting the blocker. Reranking cannot resolve it; only a status transition can. |
 
 ## Notes
 
