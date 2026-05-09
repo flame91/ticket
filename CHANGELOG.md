@@ -5,6 +5,23 @@ All notable changes to the flow plugin (renamed from `ticket` in v0.2.0) will be
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-05-10
+
+### Changed
+
+- `/ticket:rerank` default mode is now **LLM judgement**. The agent reads each candidate's description, labels, and dependency hints (description-derived blocker patterns + JIRA `is blocked by` links), then proposes an ordering with a per-ticket rationale column. Lex-ordered axes within each status weight bucket: dependency graph (blockers strictly precede blockees) → user-visible defect priority (`bug`/`regression` labels, user-report mentions, primary-locale impact) → dependency cluster grouping (keep blocker→blockee chains contiguous) → backlog noise demotion (`nit`/`rolling-backlog`/`design-heavy`/`size-l`, blocked on external setup, stale-without-urgency).
+- The previous rule-based heuristic (status group + priority DESC + created ASC) is preserved behind `--heuristic` for cheaper / deterministic runs. It remains useful when LLM cost is a concern or when only the same-priority-bucket discrimination problem is acceptable.
+
+### Fixed
+
+- `/ticket:rerank --apply` was silently producing wrong final order whenever a "no-op skip" pair sat between non-no-op pairs in the approved sequence. Each PUT physically moves an issue, which can break an adjacency that held in the JQL source order — so skipping based on source adjacency is unsound. Verified empirically while reranking the techo-map TM backlog: 11/11 partial PUTs returned 204 but the result was scrambled. Fix: always issue all N-1 PUTs. The Agile API is idempotent (returns 204 even when the target order already matches), so the cost is tolerable.
+- The bash apply loop misindexed arrays under macOS zsh (1-indexed, not 0-indexed), producing an empty `prev` for the first pair and an HTTP 400 from JIRA. Fix: wrap the loop in `bash <<'BASH' ... BASH` to force bash semantics.
+
+### Added
+
+- Verify step at the end of `--apply`: re-fetches the candidate set via the same JQL and confirms the final order matches the approved sequence. Prints `verify: OK` or lists mismatches.
+- Token-budget guard for step 1: when the JQL response exceeds the per-tool token cap, delegate the parse to a subagent with an explicit "read in chunks, return compact JSON" instruction rather than reading the saved file directly into the main context.
+
 ## [0.2.6] - 2026-05-08
 
 ### Added
