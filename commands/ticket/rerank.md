@@ -53,11 +53,11 @@ If the JQL returns more than 50 entries, **warn** that only the first 50 (by cur
 
 #### 2a. LLM-judgement mode (default)
 
-Fetch each candidate's full **description** via `getJiraIssue` (`responseContentFormat: "markdown"`, `fields: ["summary", "description", "status", "priority", "labels"]`). Read each, then rank with the four axes below — applied lexicographically (axis 1 outranks axis 2, etc.) within the status weight bucket from §2c.
+Fetch each candidate's full **description and issue links** via `getJiraIssue` (`responseContentFormat: "markdown"`, `fields: ["summary", "description", "status", "priority", "labels", "issuelinks"]`, `expand: "issuelinks"`). Both `issuelinks` in `fields` and `expand: "issuelinks"` are **mandatory** in this mode — without them, JIRA-native `is blocked by` links (the authoritative source for dependency ordering) are invisible to the agent and the cross-bucket abort in §2c cannot be enforced. If either parameter is missing or the API rejects them, **abort** with a setup pointer rather than producing a sequence based on description text alone. Read each ticket, then rank with the four axes below — applied lexicographically (axis 1 outranks axis 2, etc.) within the status weight bucket from §2c.
 
-1. **Dependency graph** — search descriptions for explicit blocker/precedence patterns:
-   - `블로커:` / `선행:` / `depends on` / `blocked by` / `after` followed by a `{projectKey}-N` key
-   - JIRA Issue links of type `is blocked by` (visible in `getJiraIssue` with `expand=issuelinks` if needed)
+1. **Dependency graph** — combine two sources, with the JIRA link as authoritative:
+   - **JIRA `is blocked by` issue links** (authoritative; from the mandatory `issuelinks` fetch). Each link names a specific issue key. Always honoured.
+   - **Description text patterns** as a supplementary signal: `블로커:` / `선행:` / `depends on` / `blocked by` / `after` followed by a `{projectKey}-N` key. Use these when the dependency exists in prose but no JIRA link was created. When a description hint and a JIRA link disagree, the link wins.
    - Within each status weight bucket, topologically sort: blockers strictly precede their blockees.
    - **Cross-bucket conflict.** If a blocker sits in a lower-priority status bucket than its blockee (e.g. a To Do prerequisite blocks an In Progress ticket), §2c forbids reordering across buckets — so the dependency invariant cannot be satisfied by reranking alone. Treat this as a workflow-state inconsistency: **abort the rerank** and report the conflicting pair with the suggested remediation (move the blockee back to a lower status, or move the blocker up). Listed as a hard-stop condition below. Never silently produce a sequence that violates the dependency invariant.
 
